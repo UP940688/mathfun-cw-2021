@@ -1,0 +1,38 @@
+This file consists of the data that you should use in your Haskell program.
+
+Your program should not process this file directly; rather, it needs to process
+a Haskell list containing the data given in this file.
+
+After you have worked out a suitable City datatype you should include the data
+from this file (without any modifications) or additions in your program as a 
+value of type [City]; i.e.:
+
+  testData :: [City]
+  testData = [ ... the 12 City values ... ]
+
+This data will be used to demonstrate the correctness of your program in the 
+in-class demonstration. 
+
+If you manage to complete loading and saving of data, make sure that the 
+testData list value is also stored (without any modifications or additions) 
+in a cities.txt file. Regardless of whether you have implemented a user
+interface or loading/saving, make sure that you also complete the demo 
+function in your program.
+
+The data for each city includes a name, a location expressed in degrees north 
+and degrees east, and a list of population figures in thousands (where the 
+first value is for this year, the second value is for last year, and so on).
+
+    "Amsterdam"    52   5    [1158, 1149, 1140, 1132]
+    "Athens"       38  23    [3153, 3153, 3154, 3156]
+    "Berlin"       53  13    [3567, 3562, 3557, 3552]
+    "Brussels"     51   4    [2096, 2081, 2065, 2050]
+    "Bucharest"    44  26    [1794, 1803, 1812, 1821]
+    "London"       52   0    [9426, 9304, 9177, 9046]
+    "Madrid"       40   4    [6669, 6618, 6559, 6497]
+    "Paris"        49   2    [11079, 11017, 10958, 10901]
+    "Rome"         42  13    [4278, 4257, 4234, 4210]
+    "Sofia"        43  23    [1284, 1281, 1277, 1272]
+    "Vienna"       48  16    [1945, 1930, 1915, 1901]
+    "Warsaw"       52  21    [1790, 1783, 1776, 1768]
+
