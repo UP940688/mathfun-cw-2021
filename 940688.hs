@@ -3,7 +3,22 @@
 --
 
 testData :: [City]
-testData = [ ... the 12 City values ... ]
+testData = 
+    [ City "Amsterdam" 52  5  [1158, 1149, 1140, 1132]
+    , City "Athens"    38 23  [3153, 3153, 3154, 3156]
+    , City "Berlin"    53 13  [3567, 3562, 3557, 3552]
+    , City "Brussels"  51  4  [2096, 2081, 2065, 2050]
+    , City "Bucharest" 44 26  [1794, 1803, 1812, 1821]
+    , City "London"    52  0  [9426, 9304, 9177, 9046]
+    , City "Madrid"    40  4  [6669, 6618, 6559, 6497]
+    , City "Paris"     49  2  [11079, 11017, 10958, 10901]
+    , City "Rome"      42 13  [4278, 4257, 4234, 4210]
+    , City "Sofia"     43 23  [1284, 1281, 1277, 1272]
+    , City "Vienna"    48 16  [1945, 1930, 1915, 1901]
+    , City "Warsaw"    52 21  [1790, 1783, 1776, 1768] ]
+
+data City = City String Int Int [Int]
+    deriving (Show,Read,Ord,Eq)
 
 
 --
