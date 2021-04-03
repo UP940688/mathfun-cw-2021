@@ -17,21 +17,35 @@ testData =
     , City "Vienna"    48 16  [1945, 1930, 1915, 1901]
     , City "Warsaw"    52 21  [1790, 1783, 1776, 1768] ]
 
-data City = City String Int Int [Int]
-    deriving (Show,Read,Ord,Eq)
+data City = City {
+    name :: String,
+    degNorth :: Int,
+    degEast :: Int,
+    populationRecord :: [Int]
+} deriving (Eq, Ord, Show, Read)
 
 
 --
 --  Your functional code goes here
 --
 
+-- demo one
 
---
+print_names :: [City] -> IO ()
+print_names = putStrLn . (++) "\nCity Names:\n\n" . format_names
+
+format_names :: [City] -> String
+format_names = foldr (++) "" . map (format_line . name)
+
+format_line :: String -> String
+format_line = ("* " ++) . (++"\n")
+
 --  Demo
 --
 
 demo :: Int -> IO ()
-demo 1 = -- output the names of all the cities
+demo 1 = print_names testData
+{--
 demo 2 = -- output the population of "Madrid" 2 years ago
 demo 3 = putStrLn (citiesToString testData)
 demo 4 = -- output the data (as for (iii)) after it has been updated with the
@@ -76,3 +90,4 @@ writeAt position text = do
 -- Your user interface (and loading/saving) code goes here
 --
  
+--}
