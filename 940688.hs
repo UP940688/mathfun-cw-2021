@@ -38,13 +38,19 @@ format_names :: [City] -> String
 format_names = foldr (++) "" . map (format_line . name)
 
 format_line :: String -> String
-format_line = ("* " ++) . (++"\n")
+format_line = ("* "++) . (++"\n")
+
+-- demo two 
+
+get_population_record :: City -> Int -> Int
+get_population_record = (!!) . populationRecord
 
 --  Demo
 --
 
 demo :: Int -> IO ()
 demo 1 = print_names testData
+demo 2 = print $ get_population_record (testData !! 6) 1
 {--
 demo 2 = -- output the population of "Madrid" 2 years ago
 demo 3 = putStrLn (citiesToString testData)
