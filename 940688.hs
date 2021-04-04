@@ -108,6 +108,27 @@ header = do
 citiesToString :: [City] -> String
 citiesToString = (++) header . foldr (++) (rowLine++"\n") . map getCityData
 
+-- demo four
+
+insertElem :: Int -> [Int] -> [Int]
+insertElem = (:)
+
+updatePopulation :: (City, Int) -> City
+updatePopulation (c, n) = do
+    let oldFigures = populationRecord c
+    let populationRecord c = n:oldFigures
+    City (name c) (degNorth c) (degEast c) (populationRecord c)
+
+updatePopulations :: [(City, Int)] -> [City]
+updatePopulations = map (updatePopulation)
+
+newPopulations cs np = updatePopulations $ zip cs np
+
+doUpdatePopulations np = do
+    let newPops = newPopulations testData np
+    let testData = newPops
+    putStrLn (citiesToString testData)
+
 --  Demo
 --
 
@@ -115,6 +136,7 @@ demo :: Int -> IO ()
 demo 1 = printNames testData
 demo 2 = printPopulation "Madrid" 2
 demo 3 = putStrLn (citiesToString testData)
+demo 4 = doUpdatePopulations [1200,3200,3600,2100,1800,9500,6700,11100,4300,1300,2000,1800]
 {--
 demo 4 = -- output the data (as for (iii)) after it has been updated with the
          -- following new population figures (the first is for Amsterdam, etc.)
