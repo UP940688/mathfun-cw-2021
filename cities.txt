@@ -1,0 +1,12 @@
+City {name = "Amsterdam", degNorth = 52, degEast = 5, populationRecord = [1158,1149,1140,1132]}
+City {name = "Athens", degNorth = 38, degEast = 23, populationRecord = [3153,3153,3154,3156]}
+City {name = "Berlin", degNorth = 53, degEast = 13, populationRecord = [3567,3562,3557,3552]}
+City {name = "Brussels", degNorth = 51, degEast = 4, populationRecord = [2096,2081,2065,2050]}
+City {name = "Bucharest", degNorth = 44, degEast = 26, populationRecord = [1794,1803,1812,1821]}
+City {name = "London", degNorth = 52, degEast = 0, populationRecord = [9426,9304,9177,9046]}
+City {name = "Madrid", degNorth = 40, degEast = 4, populationRecord = [6669,6618,6559,6497]}
+City {name = "Paris", degNorth = 49, degEast = 2, populationRecord = [11079,11017,10958,10901]}
+City {name = "Rome", degNorth = 42, degEast = 13, populationRecord = [4278,4257,4234,4210]}
+City {name = "Sofia", degNorth = 43, degEast = 23, populationRecord = [1284,1281,1277,1272]}
+City {name = "Vienna", degNorth = 48, degEast = 16, populationRecord = [1945,1930,1915,1901]}
+City {name = "Warsaw", degNorth = 52, degEast = 21, populationRecord = [1790,1783,1776,1768]}
