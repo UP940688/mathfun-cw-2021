@@ -1,3 +1,7 @@
+import Data.List
+import Data.Maybe
+import Text.Printf
+
 --
 -- Types (define City type here)
 --
@@ -24,35 +28,72 @@ data City = City {
     populationRecord :: [Int]
 } deriving (Eq, Ord, Show, Read)
 
-
 --
 --  Your functional code goes here
 --
 
 -- demo one
 
-print_names :: [City] -> IO ()
-print_names = putStrLn . (++) "\nCity Names:\n\n" . format_names
+printNames :: [City] -> IO ()
+printNames = putStrLn . (++) "\nCity Names:\n\n" . formatNames
 
-format_names :: [City] -> String
-format_names = foldr (++) "" . map (format_line . name)
+formatNames :: [City] -> String
+formatNames = foldr (++) "" . formatLines . getNames
 
-format_line :: String -> String
-format_line = ("* "++) . (++"\n")
+formatLines :: [String] -> [String]
+formatLines = map $ ("* "++) . (++"\n")
 
--- demo two 
+getNames :: [City] -> [String]
+getNames = map name
 
-get_population_record :: City -> Int -> Int
-get_population_record = (!!) . populationRecord
+-- demo two
+
+getNameIdx :: String -> Maybe Int
+getNameIdx =  flip elemIndex $ getNames testData
+
+validYear :: Int -> Int -> Maybe Int
+validYear yr yrLen
+  | (yr >= 0) && (yr < yrLen) = Just yr
+  | otherwise = Nothing
+
+cityMaybe :: Maybe Int -> Maybe City
+cityMaybe (Just idx) = Just (testData !! idx)
+cityMaybe _ = Nothing
+
+lenPopMaybe :: Maybe City -> Maybe Int
+lenPopMaybe (Just city) = Just (length $ populationRecord city)
+lenPopMaybe _ = Nothing
+
+convertInputs :: String -> Int -> (Maybe City, Maybe Int)
+convertInputs n yr = do
+    let city = cityMaybe $ getNameIdx n
+    let year = maybe Nothing (validYear yr) (lenPopMaybe city)
+    (city, year)
+
+getPopulationString :: (Maybe City, Maybe Int) -> String
+getPopulationString (Just city, Just popIdx) = do
+    let population = (populationRecord city) !! popIdx
+    formatPopulation (fromIntegral population :: Float)
+getPopulationString _ = "no data"  
+
+getPopulation :: String -> Int -> String
+getPopulation n yr = do
+    let (city, year) = convertInputs n yr
+    getPopulationString (city, year)
+
+printPopulation :: String -> Int -> IO ()
+printPopulation n yr = putStrLn $ "\nPopulation: " ++ (getPopulation n yr) ++ "\n"
+
+formatPopulation :: Float -> String
+formatPopulation = printf "%.3fm" . flip (/) 1000
 
 --  Demo
 --
 
 demo :: Int -> IO ()
-demo 1 = print_names testData
-demo 2 = print $ get_population_record (testData !! 6) 1
+demo 1 = printNames testData
+demo 2 = printPopulation "Madrid" 2
 {--
-demo 2 = -- output the population of "Madrid" 2 years ago
 demo 3 = putStrLn (citiesToString testData)
 demo 4 = -- output the data (as for (iii)) after it has been updated with the
          -- following new population figures (the first is for Amsterdam, etc.)
