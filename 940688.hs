@@ -89,6 +89,7 @@ formatPopulation = printf "%.3fm" . flip (/) 1000
 
 -- demo three
 
+getCityData :: PrintfType t => City -> t
 getCityData c = do
     let locNorth = (show $ degNorth c)
     let locEast = (show $ degEast c)
@@ -98,6 +99,7 @@ getCityData c = do
     let popLast = formatPopulation (fromIntegral last ::  Float)
     printf "\n| %-12s | %14s | %14s | %12s | %13s |" (name c) locNorth locEast popCur popLast
 
+rowLine :: [Char]
 rowLine = "\n---------------------------------------------------------------------------------"
 
 header :: String
@@ -113,21 +115,24 @@ citiesToString = (++) header . foldr (++) (rowLine++"\n") . map getCityData
 insertElem :: Int -> [Int] -> [Int]
 insertElem = (:)
 
-updatePopulation :: (City, Int) -> City
-updatePopulation (c, n) = do
+addYearToRecord :: (City, Int) -> City
+addYearToRecord (c, n) = do
     let oldFigures = populationRecord c
     let populationRecord c = n:oldFigures
     City (name c) (degNorth c) (degEast c) (populationRecord c)
 
-updatePopulations :: [(City, Int)] -> [City]
-updatePopulations = map (updatePopulation)
+addYearsToRecords :: [(City, Int)] -> [City]
+addYearsToRecords = map (addYearToRecord)
 
-newPopulations cs np = updatePopulations $ zip cs np
+newPopulations :: [City] -> [Int] -> [City]
+newPopulations cs np = addYearsToRecords $ zip cs np
 
-doUpdatePopulations np = do
-    let newPops = newPopulations testData np
-    let testData = newPops
-    putStrLn (citiesToString testData)
+updatePopulations :: [Int] -> IO ()
+updatePopulations p = putStrLn $ citiesToString $ newPopulations testData p
+
+-- demo five
+
+
 
 --  Demo
 --
@@ -136,11 +141,8 @@ demo :: Int -> IO ()
 demo 1 = printNames testData
 demo 2 = printPopulation "Madrid" 2
 demo 3 = putStrLn (citiesToString testData)
-demo 4 = doUpdatePopulations [1200,3200,3600,2100,1800,9500,6700,11100,4300,1300,2000,1800]
+demo 4 = updatePopulations [1200,3200,3600,2100,1800,9500,6700,11100,4300,1300,2000,1800]
 {--
-demo 4 = -- output the data (as for (iii)) after it has been updated with the
-         -- following new population figures (the first is for Amsterdam, etc.)
-         -- [1200,3200,3600,2100,1800,9500,6700,11100,4300,1300,2000,1800]
 demo 5 = -- show the data (as for (iii)) after adding "Prague" (50N, 14E) 
          -- with population figures [1312, 1306, 1299, 1292]
 demo 6 = -- output a list of annual growth figures for "London"
