@@ -38,7 +38,7 @@ printNames :: [City] -> IO ()
 printNames = putStrLn . (++) "\nCity Names:\n\n" . formatNames
 
 formatNames :: [City] -> String
-formatNames = foldr (++) "" . formatLines . getNames
+formatNames = concat . formatLines . getNames
 
 formatLines :: [String] -> [String]
 formatLines = map $ ("* "++) . (++"\n")
@@ -67,12 +67,12 @@ lenPopMaybe _ = Nothing
 convertInputs :: String -> Int -> (Maybe City, Maybe Int)
 convertInputs n yr = do
     let city = cityMaybe $ getNameIdx n
-    let year = maybe Nothing (validYear yr) (lenPopMaybe city)
+    let year = validYear yr =<< lenPopMaybe city
     (city, year)
 
 getPopulationString :: (Maybe City, Maybe Int) -> String
 getPopulationString (Just city, Just popIdx) = do
-    let population = (populationRecord city) !! popIdx
+    let population = populationRecord city !! popIdx
     formatPopulation (fromIntegral population :: Float)
 getPopulationString _ = "no data"  
 
@@ -82,7 +82,7 @@ getPopulation n yr = do
     getPopulationString (city, year)
 
 printPopulation :: String -> Int -> IO ()
-printPopulation n yr = putStrLn $ "\nPopulation: " ++ (getPopulation n yr) ++ "\n"
+printPopulation n yr = putStrLn $ "\nPopulation: " ++ getPopulation n yr ++ "\n"
 
 formatPopulation :: Float -> String
 formatPopulation = printf "%.3fm" . flip (/) 1000
@@ -91,8 +91,8 @@ formatPopulation = printf "%.3fm" . flip (/) 1000
 
 getCityData :: PrintfType t => City -> t
 getCityData c = do
-    let locNorth = (show $ degNorth c)
-    let locEast = (show $ degEast c)
+    let locNorth = show $ degNorth c
+    let locEast = show $ degEast c
     let cur = (!!) (populationRecord c) 0
     let popCur = formatPopulation (fromIntegral cur ::  Float)
     let last = (!!) (populationRecord c) 1
@@ -104,16 +104,13 @@ rowLine = "\n-------------------------------------------------------------------
 
 header :: String
 header = do
-    let l1 = printf "\n|     Name     |  Degrees North |  Degrees East  |  Population  |  Last Year's  |"
-    rowLine ++ l1 ++ rowLine
+    let l = printf "\n|     Name     |  Degrees North |  Degrees East  |  Population  |  Last Year's  |"
+    rowLine ++ l ++ rowLine
 
 citiesToString :: [City] -> String
-citiesToString = (++) header . foldr (++) (rowLine++"\n") . map getCityData
+citiesToString = (++) header . foldr ((++) . getCityData) (rowLine++"\n")
 
 -- demo four
-
-insertElem :: Int -> [Int] -> [Int]
-insertElem = (:)
 
 addYearToRecord :: (City, Int) -> City
 addYearToRecord (c, n) = do
@@ -122,13 +119,13 @@ addYearToRecord (c, n) = do
     City (name c) (degNorth c) (degEast c) (populationRecord c)
 
 addYearsToRecords :: [(City, Int)] -> [City]
-addYearsToRecords = map (addYearToRecord)
+addYearsToRecords = map addYearToRecord
 
 newPopulations :: [City] -> [Int] -> [City]
-newPopulations cs np = addYearsToRecords $ zip cs np
+newPopulations = zipWith (curry addYearToRecord)
 
 updatePopulations :: [Int] -> IO ()
-updatePopulations p = putStrLn $ citiesToString $ newPopulations testData p
+updatePopulations = putStrLn . citiesToString . newPopulations testData
 
 -- demo five
 
