@@ -99,15 +99,15 @@ getCityData :: PrintfType t => City -> t
 getCityData c = do
   let popCur = formatPopulation . toFloat $ head (populationRecord c)
   let popLast = formatPopulation . toFloat $ populationRecord c !! 1
-  printf "\n| %-14s | %14d | %14d | %14s | %14s |" (name c) (degNorth c) (degEast c) popCur popLast
+  printf "\n| %-12s | %12d | %12d | %12s | %12s |" (name c) (degNorth c) (degEast c) popCur popLast
 
 columnLine :: String
-columnLine = "\n+" ++ intercalate "+" (replicate 5 "----------------") ++ "+"
+columnLine = "\n+" ++ intercalate "+" (replicate 5 "--------------") ++ "+"
 
 header :: String
 header =
   printf
-    "%s\n|      Name      |  Degrees North |  Degrees East  |   Population   |   Last Years   |%s"
+    "%s\n|     Name     |  Deg. North  |   Deg. East  |  Population  |  Last Years  |%s"
     columnLine
     columnLine
 
