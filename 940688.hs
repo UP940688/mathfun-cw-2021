@@ -7,7 +7,7 @@ import Text.Printf
 --
 
 testData :: [City]
-testData = 
+testData =
     [ City "Amsterdam" 52  5  [1158, 1149, 1140, 1132]
     , City "Athens"    38 23  [3153, 3153, 3154, 3156]
     , City "Berlin"    53 13  [3567, 3562, 3557, 3552]
@@ -26,7 +26,7 @@ data City = City {
     degNorth :: Int,
     degEast :: Int,
     populationRecord :: [Int]
-} deriving (Show, Read)
+} deriving (Eq, Ord, Show, Read)
 
 --
 --  Your functional code goes here
@@ -74,7 +74,7 @@ getPopulationString :: (Maybe City, Maybe Int) -> String
 getPopulationString (Just city, Just popIdx) = do
     let population = populationRecord city !! popIdx
     formatPopulation (fromIntegral population :: Float)
-getPopulationString _ = "no data"  
+getPopulationString _ = "no data"
 
 getPopulation :: String -> Int -> String
 getPopulation n yr = do
@@ -121,15 +121,22 @@ addYearToRecord (c, n) = do
 addYearsToRecords :: [(City, Int)] -> [City]
 addYearsToRecords = map addYearToRecord
 
-newPopulations :: [City] -> [Int] -> [City]
-newPopulations = zipWith (curry addYearToRecord)
+updatePopulations :: [City] -> [Int] -> [City]
+updatePopulations = zipWith (curry addYearToRecord)
 
-updatePopulations :: [Int] -> IO ()
-updatePopulations = putStrLn . citiesToString . newPopulations testData
+printNewPopulations :: [Int] -> IO ()
+printNewPopulations = putStrLn . citiesToString . updatePopulations testData
 
 -- demo five
 
+insertNewCity :: [City] -> City -> [City]
+insertNewCity [] c = [c]
+insertNewCity (nc:cs) c
+  | name c > name nc     = nc : insertNewCity cs c
+  | otherwise            = c:nc:cs
 
+printNewCities :: City -> IO ()
+printNewCities = putStrLn . citiesToString . insertNewCity testData
 
 --  Demo
 --
@@ -138,15 +145,14 @@ demo :: Int -> IO ()
 demo 1 = printNames testData
 demo 2 = printPopulation "Madrid" 2
 demo 3 = putStrLn (citiesToString testData)
-demo 4 = updatePopulations [1200,3200,3600,2100,1800,9500,6700,11100,4300,1300,2000,1800]
+demo 4 = printNewPopulations [1200,3200,3600,2100,1800,9500,6700,11100,4300,1300,2000,1800]
+demo 5 = printNewCities (City "Prague" 50 14 [1312, 1306, 1299, 1292])
 {--
-demo 5 = -- show the data (as for (iii)) after adding "Prague" (50N, 14E) 
-         -- with population figures [1312, 1306, 1299, 1292]
 demo 6 = -- output a list of annual growth figures for "London"
 demo 7 = -- output the nearest city to location (54N ,6E) with 
          -- a population above 2m people
 demo 8 = -- output the population map
-
+--}
 
 --
 -- Screen Utilities (use these to do the population map)
@@ -167,7 +173,7 @@ writeAt :: ScreenPosition -> String -> IO ()
 writeAt position text = do
     goTo position
     putStr text
- 
+
 
 --
 -- Your population map code goes here
@@ -182,12 +188,14 @@ writeAt position text = do
 readCities :: [String] -> [City]
 readCities = map read
 
-readFileToLines = fmap (lines) . readFile
-readFileToCities = fmap (readCities) . readFileToLines
+readFileToLines :: FilePath -> IO [String]
+readFileToLines = fmap lines . readFile
 
+readFileToCities :: FilePath -> IO [City]
+readFileToCities = fmap readCities . readFileToLines
+
+getCityNames :: IO ()
 getCityNames = do
     cities <- readFileToCities "cities.txt"
-    let names = map (name) cities
-    putStrLn $ foldr (++) "" names
- 
---}
+    let names = map name cities
+    putStrLn $ concat names
