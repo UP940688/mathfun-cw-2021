@@ -97,18 +97,18 @@ getCityData c = do
     let popCur = formatPopulation (fromIntegral cur ::  Float)
     let last = (!!) (populationRecord c) 1
     let popLast = formatPopulation (fromIntegral last ::  Float)
-    printf "\n| %-12s | %14s | %14s | %12s | %13s |" (name c) locNorth locEast popCur popLast
+    printf "\n| %-14s | %14s | %14s | %14s | %14s |" (name c) locNorth locEast popCur popLast
 
-rowLine :: [Char]
-rowLine = "\n---------------------------------------------------------------------------------"
+columnLine :: [Char]
+columnLine = "\n+" ++ intercalate "+" (replicate 5 "----------------") ++ "+"
 
 header :: String
 header = do
-    let l = printf "\n|     Name     |  Degrees North |  Degrees East  |  Population  |  Last Year's  |"
-    rowLine ++ l ++ rowLine
+    let l = printf "\n|      Name      |  Degrees North |  Degrees East  |   Population   |   Last Years   |"
+    columnLine ++ l ++ columnLine
 
 citiesToString :: [City] -> String
-citiesToString = (++) header . foldr ((++) . getCityData) (rowLine++"\n")
+citiesToString = (++) header . foldr ((++) . getCityData) (columnLine++"\n")
 
 -- demo four
 
@@ -137,6 +137,10 @@ insertNewCity (nc:cs) c
 
 printNewCities :: City -> IO ()
 printNewCities = putStrLn . citiesToString . insertNewCity testData
+
+-- demo six
+
+
 
 --  Demo
 --
