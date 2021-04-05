@@ -1,6 +1,7 @@
 import Data.List (elemIndex, intercalate)
 import Data.Maybe ()
 import Text.Printf (PrintfType, printf)
+import Control.Monad (ap)
 
 --
 -- Types (define City type here)
@@ -41,11 +42,11 @@ type Location = (Int, Int)
 toFloat :: Int -> Float
 toFloat = fromIntegral
 
-getNames :: [City] -> [String]
-getNames = map name
-
 getNameIdx :: String -> Maybe Int
 getNameIdx = flip elemIndex $ getNames testData
+
+getNames :: [City] -> [String]
+getNames = map name
 
 -- demo one
 
@@ -69,30 +70,28 @@ cityMaybe :: Maybe Int -> Maybe City
 cityMaybe (Just idx) = Just (testData !! idx)
 cityMaybe _ = Nothing
 
-lenPopMaybe :: Maybe City -> Maybe Int
-lenPopMaybe (Just city) = Just (length $ populationRecord city)
-lenPopMaybe _ = Nothing
-
 convertInputs :: String -> Int -> (Maybe City, Maybe Int)
 convertInputs n yr = do
   let city = cityMaybe $ getNameIdx n
   let year = validYear yr =<< lenPopMaybe city
   (city, year)
 
-getPopulationString :: (Maybe City, Maybe Int) -> String
-getPopulationString (Just city, Just popIdx) = do
-  let population = populationRecord city !! popIdx
-  formatPopulation $ toFloat population
-getPopulationString _ = "no data"
+lenPopMaybe :: Maybe City -> Maybe Int
+lenPopMaybe (Just city) = Just (length $ populationRecord city)
+lenPopMaybe _ = Nothing
 
-getPopulation :: String -> Int -> String
-getPopulation year = getPopulationString . convertInputs year
+getPopulationString :: (Maybe City, Maybe Int) -> String
+getPopulationString (Just city, Just idx) = formatPopulation $ toFloat $ populationRecord city !! idx
+getPopulationString _ = "No data"
+
+formatPopulation :: Float -> String
+formatPopulation = printf "%.3fm" . flip (/) 1000
 
 printPopulation :: String -> Int -> IO ()
 printPopulation c yr = putStrLn $ "\nPopulation: " ++ getPopulation c yr ++ "\n"
 
-formatPopulation :: Float -> String
-formatPopulation = printf "%.3fm" . flip (/) 1000
+getPopulation :: String -> Int -> String
+getPopulation year = getPopulationString . convertInputs year
 
 -- demo three
 
@@ -155,26 +154,32 @@ getCityGrowthFigures c = formatGrowthFigures . growthFigures $ populationRecord 
 printAnnualGrowth :: String -> IO ()
 printAnnualGrowth cname = do
   let city = cityMaybe $ getNameIdx cname
-  putStrLn $ printf "\nPopulation Growth (%s):\n" cname ++ maybe "\nno data" getCityGrowthFigures city ++ "\n"
+  putStrLn $ printf "\nPopulation Growth (%s):\n" cname ++ maybe "\nNo data" getCityGrowthFigures city ++ "\n"
 
 -- demo seven
 
 distanceBetween :: Location -> Location -> Float
 distanceBetween (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
 
-hasHigherPopulation :: City -> Int -> Bool
-hasHigherPopulation = (>) . head . populationRecord
+higherPopulation :: Int -> City -> Bool
+higherPopulation = flip $ (>) . head . populationRecord
 
-zipLocations :: [Location]
-zipLocations = zip (map degNorth testData) (map degEast testData)
+zipLocations :: [City] -> [Location]
+zipLocations c = zip (map degNorth c) (map degEast c)
 
-doFindNearest :: (Int, Int) -> p -> Maybe Int
-doFindNearest loc population = do
-  let cities = getNames testData
-  let distances = map (distanceBetween loc) zipLocations
+getNameFromList :: [City] -> Int -> String
+getNameFromList cities idx = name $ cities !! idx
+
+findNearestCity :: Location -> Int -> String
+findNearestCity loc population = do
+  let cities = filter (higherPopulation population) testData
+  let distances = map (distanceBetween loc) (zipLocations cities)
   let min = minimum distances
   let idx = elemIndex min distances
-  idx
+  maybe "No City" (getNameFromList cities) idx
+
+printNearestCity :: Location -> Int -> IO ()
+printNearestCity loc population = putStrLn $ printf "\n\nNearest City: %s\n" (findNearestCity loc population)
 
 --  Demo
 --
@@ -186,11 +191,8 @@ demo 3 = putStrLn (citiesToString testData)
 demo 4 = printNewPopulations [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
 demo 5 = printNewCities (City "Prague" 50 14 [1312, 1306, 1299, 1292])
 demo 6 = printAnnualGrowth "London"
-
---demo 7 = <somefunc> (54, 6) 2000000
+demo 7 = printNearestCity (54, 6) 2000
 {--
-demo 7 = -- output the nearest city to location (54N ,6E) with
-         -- a population above 2m people
 demo 8 = -- output the population map
 --}
 
