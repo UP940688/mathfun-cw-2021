@@ -1,6 +1,6 @@
-import Data.List
-import Data.Maybe
-import Text.Printf
+import Data.List ( elemIndex, intercalate )
+import Data.Maybe ()
+import Text.Printf ( printf, PrintfType )
 
 --
 -- Types (define City type here)
@@ -48,12 +48,15 @@ getNames = map name
 
 -- demo two
 
+toFloat :: Int -> Float
+toFloat = fromIntegral
+
 getNameIdx :: String -> Maybe Int
 getNameIdx =  flip elemIndex $ getNames testData
 
 validYear :: Int -> Int -> Maybe Int
 validYear yr yrLen
-  | (yr >= 0) && (yr < yrLen) = Just yr
+  | yr >= 0 && yr < yrLen = Just yr
   | otherwise = Nothing
 
 cityMaybe :: Maybe Int -> Maybe City
@@ -73,7 +76,7 @@ convertInputs n yr = do
 getPopulationString :: (Maybe City, Maybe Int) -> String
 getPopulationString (Just city, Just popIdx) = do
     let population = populationRecord city !! popIdx
-    formatPopulation (fromIntegral population :: Float)
+    formatPopulation $ toFloat population
 getPopulationString _ = "no data"
 
 getPopulation :: String -> Int -> String
@@ -82,7 +85,7 @@ getPopulation n yr = do
     getPopulationString (city, year)
 
 printPopulation :: String -> Int -> IO ()
-printPopulation n yr = putStrLn $ "\nPopulation: " ++ getPopulation n yr ++ "\n"
+printPopulation c yr = putStrLn $ "\nPopulation: " ++ getPopulation c yr ++ "\n"
 
 formatPopulation :: Float -> String
 formatPopulation = printf "%.3fm" . flip (/) 1000
@@ -91,21 +94,17 @@ formatPopulation = printf "%.3fm" . flip (/) 1000
 
 getCityData :: PrintfType t => City -> t
 getCityData c = do
-    let locNorth = show $ degNorth c
-    let locEast = show $ degEast c
-    let cur = (!!) (populationRecord c) 0
-    let popCur = formatPopulation (fromIntegral cur ::  Float)
-    let last = (!!) (populationRecord c) 1
-    let popLast = formatPopulation (fromIntegral last ::  Float)
-    printf "\n| %-14s | %14s | %14s | %14s | %14s |" (name c) locNorth locEast popCur popLast
+    let popCur = formatPopulation . toFloat $ head (populationRecord c)
+    let popLast = formatPopulation . toFloat $ populationRecord c !! 1
+    printf "\n| %-14s | %14d | %14d | %14s | %14s |" (name c) (degNorth c) (degEast c) popCur popLast
 
-columnLine :: [Char]
+columnLine :: String
 columnLine = "\n+" ++ intercalate "+" (replicate 5 "----------------") ++ "+"
 
 header :: String
-header = do
-    let l = printf "\n|      Name      |  Degrees North |  Degrees East  |   Population   |   Last Years   |"
-    columnLine ++ l ++ columnLine
+header = printf
+    "%s\n|      Name      |  Degrees North |  Degrees East  |   Population   |   Last Years   |%s"
+    columnLine columnLine
 
 citiesToString :: [City] -> String
 citiesToString = (++) header . foldr ((++) . getCityData) (columnLine++"\n")
@@ -117,9 +116,6 @@ addYearToRecord (c, n) = do
     let oldFigures = populationRecord c
     let populationRecord c = n:oldFigures
     City (name c) (degNorth c) (degEast c) (populationRecord c)
-
-addYearsToRecords :: [(City, Int)] -> [City]
-addYearsToRecords = map addYearToRecord
 
 updatePopulations :: [City] -> [Int] -> [City]
 updatePopulations = zipWith (curry addYearToRecord)
@@ -140,7 +136,20 @@ printNewCities = putStrLn . citiesToString . insertNewCity testData
 
 -- demo six
 
+growthFigures :: [Int] -> [Float]
+growthFigures [cy, py] = [toFloat (cy-py) / toFloat py * 100]
+growthFigures (cy:py:ys) = growthFigures [cy, py] ++ growthFigures (py:head ys:tail ys)
 
+formatGrowthFigures :: [Float] -> String
+formatGrowthFigures = concatMap $ printf "\n* %.2f%%"
+
+getCityGrowthFigures :: City -> String
+getCityGrowthFigures c = formatGrowthFigures . growthFigures $ populationRecord c
+
+printAnnualGrowth :: String -> IO ()
+printAnnualGrowth cname = do
+    let city = cityMaybe $ getNameIdx cname
+    putStrLn $ printf "\nPopulation Growth (%s):\n" cname ++ maybe "\nno data" getCityGrowthFigures city ++ "\n"
 
 --  Demo
 --
@@ -151,8 +160,8 @@ demo 2 = printPopulation "Madrid" 2
 demo 3 = putStrLn (citiesToString testData)
 demo 4 = printNewPopulations [1200,3200,3600,2100,1800,9500,6700,11100,4300,1300,2000,1800]
 demo 5 = printNewCities (City "Prague" 50 14 [1312, 1306, 1299, 1292])
+demo 6 = printAnnualGrowth "London"
 {--
-demo 6 = -- output a list of annual growth figures for "London"
 demo 7 = -- output the nearest city to location (54N ,6E) with 
          -- a population above 2m people
 demo 8 = -- output the population map
