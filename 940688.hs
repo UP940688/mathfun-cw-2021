@@ -1,7 +1,9 @@
+-- for finding index of element and table formatting
 import Data.List (elemIndex, intercalate)
+-- for dealing with return value of elemIndex
 import Data.Maybe ()
-import Text.Printf (PrintfType, printf)
-import Control.Monad (ap)
+-- for pretty printing table output
+import Text.Printf (printf)
 
 --
 -- Types (define City type here)
@@ -39,23 +41,31 @@ type Location = (Int, Int)
 
 -- helper funcs
 
+-- haskell can fill in the gaps from the type signatures
+-- so we can make some functions more concise
 toFloat :: Int -> Float
 toFloat = fromIntegral
 
-getNameIdx :: String -> Maybe Int
-getNameIdx = flip elemIndex $ getNames testData
+nameIndex :: String -> [City] -> Maybe Int
+-- this could be written pointfully as
+-- nameIndex name cities = (elemIndex name . getNames) cities
+nameIndex = (. getNames) . elemIndex
 
 getNames :: [City] -> [String]
 getNames = map name
 
+-- TODO : Fully separate String formatting + code logic from functions that print it
+
 -- demo one
 
+-- map each name to putStrLn
 printNames :: [City] -> IO ()
-printNames = putStrLn . (++) "\nCity Names:\n\n" . formatNames
+printNames = mapM_ putStrLn . getNames
 
-formatNames :: [City] -> String
-formatNames = concat . formatLines . getNames
+prettyPrintNames :: [City] -> IO ()
+prettyPrintNames = putStrLn . ("\n" ++) . concat . formatLines . getNames
 
+-- append an asterix before array element, newline char after
 formatLines :: [String] -> [String]
 formatLines = map $ ("* " ++) . (++ "\n")
 
@@ -70,32 +80,32 @@ cityMaybe :: Maybe Int -> Maybe City
 cityMaybe (Just idx) = Just (testData !! idx)
 cityMaybe _ = Nothing
 
-convertInputs :: String -> Int -> (Maybe City, Maybe Int)
-convertInputs n yr = do
-  let city = cityMaybe $ getNameIdx n
+convertInputs :: String -> Int -> [City] -> (Maybe City, Maybe Int)
+convertInputs n yr cities = do
+  let city = cityMaybe $ n `nameIndex` cities
   let year = validYear yr =<< lenPopMaybe city
   (city, year)
 
 lenPopMaybe :: Maybe City -> Maybe Int
-lenPopMaybe (Just city) = Just (length $ populationRecord city)
+lenPopMaybe (Just city) = Just $ length $ populationRecord city
 lenPopMaybe _ = Nothing
 
 getPopulationString :: (Maybe City, Maybe Int) -> String
-getPopulationString (Just city, Just idx) = formatPopulation $ toFloat $ populationRecord city !! idx
-getPopulationString _ = "No data"
+getPopulationString (Just city, Just idx) = (formatPopulation . toFloat) $ populationRecord city !! idx
+getPopulationString _ = "no data"
 
 formatPopulation :: Float -> String
 formatPopulation = printf "%.3fm" . flip (/) 1000
 
-printPopulation :: String -> Int -> IO ()
-printPopulation c yr = putStrLn $ "\nPopulation: " ++ getPopulation c yr ++ "\n"
+prettyPrintPopulation :: String -> Int -> [City] -> IO ()
+prettyPrintPopulation c yr cities  = putStrLn $ "\nPopulation: " ++ getPopulation c yr cities ++ "\n"
 
-getPopulation :: String -> Int -> String
-getPopulation year = getPopulationString . convertInputs year
+getPopulation :: String -> Int -> [City] -> String
+getPopulation year cities = getPopulationString . convertInputs year cities
 
 -- demo three
 
-getCityData :: PrintfType t => City -> t
+getCityData :: City -> String
 getCityData c = do
   let popCur = formatPopulation . toFloat $ head (populationRecord c)
   let popLast = formatPopulation . toFloat $ populationRecord c !! 1
@@ -125,19 +135,19 @@ addYearToRecord (c, n) = do
 updatePopulations :: [City] -> [Int] -> [City]
 updatePopulations = zipWith (curry addYearToRecord)
 
-printNewPopulations :: [Int] -> IO ()
-printNewPopulations = putStrLn . citiesToString . updatePopulations testData
+formatNewPopulations :: [Int] -> [City] -> String
+formatNewPopulations = (citiesToString .) . flip updatePopulations
 
 -- demo five
 
-insertNewCity :: [City] -> City -> [City]
-insertNewCity [] c = [c]
-insertNewCity (nc : cs) c
-  | name c > name nc = nc : insertNewCity cs c
+insertNewCity :: City -> [City] -> [City]
+insertNewCity c [] = [c]
+insertNewCity c (nc : cs)
+  | name c > name nc = nc : insertNewCity c cs
   | otherwise = c : nc : cs
 
-printNewCities :: City -> IO ()
-printNewCities = putStrLn . citiesToString . insertNewCity testData
+formatNewCities :: City -> [City] -> String
+formatNewCities = (citiesToString .) . insertNewCity
 
 -- demo six
 
@@ -145,16 +155,14 @@ growthFigures :: [Int] -> [Float]
 growthFigures [cy, py] = [toFloat (cy - py) / toFloat py * 100]
 growthFigures (cy : py : ys) = growthFigures [cy, py] ++ growthFigures (py : head ys : tail ys)
 
-formatGrowthFigures :: [Float] -> String
-formatGrowthFigures = concatMap $ printf "\n* %.2f%%"
+getCityGrowthFigures :: City -> [Float]
+getCityGrowthFigures c = growthFigures $ populationRecord c
 
-getCityGrowthFigures :: City -> String
-getCityGrowthFigures c = formatGrowthFigures . growthFigures $ populationRecord c
+getAnnualGrowth :: String -> [City] -> [Float]
+getAnnualGrowth s c = maybe [] getCityGrowthFigures . cityMaybe $ nameIndex s c
 
-printAnnualGrowth :: String -> IO ()
-printAnnualGrowth cname = do
-  let city = cityMaybe $ getNameIdx cname
-  putStrLn $ printf "\nPopulation Growth (%s):\n" cname ++ maybe "\nNo data" getCityGrowthFigures city ++ "\n"
+printAnnualGrowth :: String -> [City] -> IO ()
+printAnnualGrowth = (mapM_ print .) . getAnnualGrowth
 
 -- demo seven
 
@@ -170,31 +178,30 @@ zipLocations c = zip (map degNorth c) (map degEast c)
 getNameFromList :: [City] -> Int -> String
 getNameFromList cities idx = name $ cities !! idx
 
-findNearestCity :: Location -> Int -> String
-findNearestCity loc population = do
-  let cities = filter (higherPopulation population) testData
-  let distances = map (distanceBetween loc) (zipLocations cities)
-  let min = minimum distances
-  let idx = elemIndex min distances
-  maybe "No City" (getNameFromList cities) idx
+findNearestCity :: Location -> Int -> [City] -> String
+findNearestCity loc population cities = do
+  let candidates = filter (higherPopulation population) cities
+  let distances = map (distanceBetween loc) $ zipLocations candidates
+  let idx = elemIndex (minimum distances) distances
+  maybe "no city" (getNameFromList cities) idx
 
-printNearestCity :: Location -> Int -> IO ()
-printNearestCity loc population = putStrLn $ printf "\n\nNearest City: %s\n" (findNearestCity loc population)
+-- making this pointfree is doable but readability starts to suffer
+printNearestCity :: Location -> Int -> [City] -> IO ()
+printNearestCity cities = (putStrLn .) . findNearestCity cities
 
 --  Demo
 --
 
 demo :: Int -> IO ()
 demo 1 = printNames testData
-demo 2 = printPopulation "Madrid" 2
-demo 3 = putStrLn (citiesToString testData)
-demo 4 = printNewPopulations [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
-demo 5 = printNewCities (City "Prague" 50 14 [1312, 1306, 1299, 1292])
-demo 6 = printAnnualGrowth "London"
-demo 7 = printNearestCity (54, 6) 2000
-{--
-demo 8 = -- output the population map
---}
+demo 2 = putStrLn $ getPopulation "Madrid" 2 testData
+demo 3 = putStrLn $ citiesToString testData
+demo 4 = putStrLn $ formatNewPopulations [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800] testData
+demo 5 = putStrLn $ formatNewCities (City "Prague" 50 14 [1312, 1306, 1299, 1292]) testData
+demo 6 = printAnnualGrowth "London" testData
+demo 7 = printNearestCity (54, 6) 2000 testData
+
+--demo 8 = -- output the population map
 
 --
 -- Screen Utilities (use these to do the population map)
@@ -219,6 +226,15 @@ writeAt position text = do
 --
 -- Your population map code goes here
 --
+
+correspondingPosition :: Location -> ScreenPosition
+correspondingPosition (n, e) = (n * 2, e * 2)
+
+writeBox :: Location -> IO ()
+writeBox (n, e) = do
+  let (x, y) = correspondingPosition (n, e)
+  writeAt (x, y) "++"
+  writeAt (x, y + 1) "++ London (9.42m)"
 
 --
 -- Your user interface (and loading/saving) code goes here
