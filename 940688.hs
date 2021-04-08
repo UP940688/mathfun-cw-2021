@@ -226,7 +226,7 @@ writeAt position text = do
 writeBox :: Location -> String -> String -> IO ()
 writeBox (n, e) name pop = do
   writeAt (n, e) ("+ " ++ name)
-  writeAt (n, e+2) pop
+  writeAt (n, e + 2) pop
 
 drawCity :: City -> IO ()
 drawCity city = do
@@ -305,14 +305,13 @@ doFindCityIO cities = do
   location <- doGetListOfInts
   putStrLn "Please enter minimum population city should have:"
   minPopulation <- doGetInt
-  if length location /= 2 then do
-    putStrLn "Invalid locations entered"
-    return ()
-  else
-    case minPopulation of
+  if length location /= 2
+    then do
+      putStrLn "Invalid locations entered"
+      return ()
+    else case minPopulation of
       (Just pop) -> putStrLn $ "\nNearest City: " ++ findNearestCity (head location, last location) pop cities ++ "\n"
       _ -> putStrLn "Invalid population figure entered."
-
 
 doCityNameIO :: IO String
 doCityNameIO = do
