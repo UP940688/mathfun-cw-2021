@@ -1,9 +1,9 @@
 -- for finding index of element and table formatting
-import Data.List (elemIndex, intercalate)
+import Data.List   (elemIndex, intercalate)
 -- for pretty printing table output
 import Text.Printf (printf)
 -- for parsing user input into Maybe (Type)
-import Text.Read (readMaybe)
+import Text.Read   (readMaybe)
 
 ------------------------------------------------
 --                   types                    --
@@ -26,12 +26,12 @@ testData =
   ]
 
 data City = City
-  { name :: String,
-    degNorth :: Int,
-    degEast :: Int,
+  { name             :: String,
+    degNorth         :: Int,
+    degEast          :: Int,
     populationRecord :: [Int]
   }
-  deriving (Show, Read)
+  deriving (Eq, Ord, Show, Read)
 
 type Location = (Int, Int)
 
@@ -62,47 +62,52 @@ getPrettyNames = ("\nCities:\n\n" ++) . unlines . map (("* " ++) . name)
 --                  section two               --
 ------------------------------------------------
 
--- return Nothing if year is above max
-validYear :: Int -> Int -> Maybe Int
-validYear yr max
-  | yr >= 0 && yr < max = Just yr
+-- return Nothing if int is above max
+maybeInt :: Int -> Int -> Maybe Int
+maybeInt x max
+  | x >= 0 && x < max = Just x
   | otherwise = Nothing
 
--- idx must be validated as a safe number before calling this function
-cityMaybe :: Maybe Int -> Maybe City
-cityMaybe (Just i) = Just $ testData !! i
-cityMaybe _ = Nothing
+maybeCity :: Maybe Int -> Maybe City
+maybeCity (Just i) = Just $ testData !! i
+maybeCity _        = Nothing
 
--- take a user or program supplied string + int, convert them
--- to Just / Nothing values depending on checks passed
+maybePopLength :: Maybe City -> Maybe Int
+maybePopLength (Just city) = Just $ (length . populationRecord) city
+maybePopLength _           = Nothing
+
+-- take a user or program supplied string + int, convert to
+-- to (Just a) / Nothing values using above functions
 convertInputs :: String -> Int -> [City] -> (Maybe City, Maybe Int)
 convertInputs n yr cs = do
-  let city = cityMaybe $ n `nameIndex` cs
-  (city, validYear yr =<< lenPopMaybe city)
-
-lenPopMaybe :: Maybe City -> Maybe Int
-lenPopMaybe (Just city) = Just $ (length . populationRecord) city
-lenPopMaybe _ = Nothing
+  let city = maybeCity $ n `nameIndex` cs
+  -- (x =<< y) == maybe Nothing (x :: -> b -> Maybe a) (y :: -> Maybe b)
+  -- very neat shorthand :D
+  (city, maybeInt yr =<< maybePopLength city)
 
 getPopulationString :: (Maybe City, Maybe Int) -> String
 getPopulationString (Just c, Just i) = (formatPopulation . toFloat) $ populationRecord c !! i
 getPopulationString _ = "no data"
 
 -- format population from  X thousands to X millions (to 3 d.p.)
+-- use flip so that we flip the order / takes its arguments
+-- (so we can make this pointfree)
 formatPopulation :: Float -> String
-formatPopulation = printf "%.3fm" . flip (/) 1000
+formatPopulation = printf "%.3fm" . (/) 1000
 
 getPopulation :: String -> Int -> [City] -> String
-getPopulation yr cs = getPopulationString . convertInputs yr cs
+getPopulation n yr = getPopulationString . convertInputs n yr
 
 --------------------------------------------------
 --                  section three               --
 --------------------------------------------------
 
+getPopulationPair :: [Int] -> (String, String)
+getPopulationPair (f : s : _) = (format f, format s) where format = formatPopulation . toFloat
+
 getCityData :: City -> String
 getCityData c = do
-  let popCur = formatPopulation . toFloat $ head (populationRecord c)
-  let popLast = formatPopulation . toFloat $ populationRecord c !! 1
+  let (popCur, popLast) = getPopulationPair $ populationRecord c
   printf "%-12s   %12d   %12d   %12s   %12s" (name c) (degNorth c) (degEast c) popCur popLast
 
 citiesToString :: [City] -> String
@@ -113,8 +118,7 @@ citiesToString = unlines . map getCityData
 
 getCityTableData :: City -> String
 getCityTableData c = do
-  let popCur = formatPopulation . toFloat $ head (populationRecord c)
-  let popLast = formatPopulation . toFloat $ populationRecord c !! 1
+  let (popCur, popLast) = getPopulationPair $ populationRecord c
   printf "\n| %-12s | %12d | %12d | %12s | %12s |" (name c) (degNorth c) (degEast c) popCur popLast
 
 citiesToTable :: [City] -> String
@@ -137,6 +141,7 @@ columnLine = "\n+" ++ intercalate "+" (replicate 5 "--------------") ++ "+"
 addYearToRecord :: (City, Int) -> City
 addYearToRecord (c, x) = City (name c) (degNorth c) (degEast c) (x : populationRecord c)
 
+-- todo : we shouldn't nuke cities that aren't updated
 updatePopulations :: [City] -> [Int] -> [City]
 updatePopulations = zipWith (curry addYearToRecord)
 
@@ -148,10 +153,10 @@ formatNewPopulations = (citiesToString .) . flip updatePopulations
 -------------------------------------------------
 
 insertNewCity :: City -> [City] -> [City]
+insertNewCity c cs@(head' : tail')
+  | c > head' = head' : insertNewCity c tail'
+  | otherwise = c : cs
 insertNewCity c [] = [c]
-insertNewCity c (cn : cs)
-  | name c > name cn = cn : insertNewCity c cs
-  | otherwise = c : cn : cs
 
 formatNewCities :: City -> [City] -> String
 formatNewCities = (citiesToString .) . insertNewCity
@@ -162,16 +167,13 @@ formatNewCities = (citiesToString .) . insertNewCity
 
 calcFigures :: [Int] -> [Float]
 calcFigures [c, p] = [toFloat (c - p) / toFloat p * 100]
-calcFigures (c : p : ys) = calcFigures [c, p] ++ calcFigures (p : head ys : tail ys)
+calcFigures (c : p : ys) = calcFigures [c, p] ++ calcFigures (p : ys)
 
-getCityGrowthFigures :: City -> [Float]
-getCityGrowthFigures = calcFigures . populationRecord
+getGrowth :: String -> [City] -> [Float]
+getGrowth n cs = (maybe [] (calcFigures . populationRecord) . maybeCity) $ nameIndex n cs
 
-getFigsFromName :: String -> [City] -> [Float]
-getFigsFromName n cs = (maybe [] getCityGrowthFigures . cityMaybe) $ nameIndex n cs
-
-getGrowthFigures :: String -> [City] -> String
-getGrowthFigures c cs = unlines $ map show $ getFigsFromName c cs
+formatGrowthFigures :: String -> [City] -> String
+formatGrowthFigures c cs = unlines $ map show $ getGrowth c cs
 
 --------------------------------------------------
 --                  section seven               --
@@ -209,7 +211,7 @@ demo 2 = putStrLn $ getPopulation "Madrid" 2 testData
 demo 3 = putStr $ citiesToString testData
 demo 4 = putStr $ formatNewPopulations [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800] testData
 demo 5 = putStr $ formatNewCities (City "Prague" 50 14 [1312, 1306, 1299, 1292]) testData
-demo 6 = putStr $ getGrowthFigures "London" testData
+demo 6 = putStr $ formatGrowthFigures "London" testData
 demo 7 = putStrLn $ findNearestCity (54, 6) 2000 testData
 -- WIP
 demo 8 = drawCities testData
@@ -317,17 +319,16 @@ main = do
 
 doFindCityIO :: [City] -> IO ()
 doFindCityIO cities = do
-  putStrLn "Please enter location in degrees seperately (north first, then east):"
-  location <- doGetListOfInts
+  putStr "Please enter city's location (degrees north)\n> "
+  degNorth <- doGetInt
+  putStr "Please enter city's location (degrees east):\n> "
+  degEast <- doGetInt
   putStr "Please enter minimum population city should have:\n> "
   minPopulation <- doGetInt
-  if length location /= 2
-    then do
-      putStrLn "Invalid locations entered"
-      return ()
-    else case minPopulation of
-      (Just pop) -> putStrLn $ "\nNearest City: " ++ findNearestCity (head location, last location) pop cities
-      _ -> putStrLn "Invalid population figure entered."
+  case (degNorth, degEast, minPopulation) of
+    (Just dN, Just dE, Just pop) -> do
+      putStrLn $ "\nNearest City: " ++ findNearestCity (dN, dE) pop cities
+    _ -> putStrLn "Invalid population figure entered."
 
 doCityNameIO :: IO String
 doCityNameIO = do
@@ -336,6 +337,7 @@ doCityNameIO = do
 
 doGetListOfInts :: IO [Int]
 doGetListOfInts = do
+  -- any non integer input terminates the recursion
   putStr "Please enter an integer ('exit' to finish)\n> "
   input <- doGetInt
   case input of
@@ -347,8 +349,7 @@ doGetListOfInts = do
 doGetInt :: IO (Maybe Int)
 doGetInt = do
   input <- getLine
-  let converted = readMaybe input :: Maybe Int
-  return converted
+  return (readMaybe input :: Maybe Int)
 
 doPopulationIO :: [City] -> IO ()
 doPopulationIO cities = do
@@ -357,12 +358,12 @@ doPopulationIO cities = do
   idx <- doGetInt
   case idx of
     (Just i) -> putStrLn $ "\nPopulation: " ++ getPopulation city i cities
-    Nothing -> putStrLn "Invalid index"
+    Nothing  -> putStrLn "Invalid index"
 
 doAnnualGrowthIO :: [City] -> IO ()
 doAnnualGrowthIO cs = do
   n <- doCityNameIO
-  putStrLn $ "\nAnnual Growth Figures:\n" ++ unlines (printf "* %.2f%%" <$> getFigsFromName n cs)
+  putStrLn $ "\nAnnual Growth Figures:\n" ++ unlines (printf "* %.2f%%" <$> getGrowth n cs)
 
 -- <$> is the infix shortcut for fmap
 doUpdatePopulationIO :: [City] -> IO [City]
