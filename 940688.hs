@@ -1,9 +1,9 @@
 -- for finding index of element and table formatting
-import Data.List   (elemIndex, intercalate)
+import Data.List (elemIndex, intercalate)
 -- for pretty printing table output
 import Text.Printf (printf)
 -- for parsing user input into Maybe (Type)
-import Text.Read   (readMaybe)
+import Text.Read (readMaybe)
 
 ------------------------------------------------
 --                   types                    --
@@ -26,10 +26,10 @@ testData =
   ]
 
 data City = City
-  { name             :: String,
-    degNorth         :: Int,
-    degEast          :: Int,
-    populationRecord :: [Int]
+  { name :: String,
+    degNorth :: Int,
+    degEast :: Int,
+    populations :: [Int]
   }
   deriving (Eq, Ord, Show, Read)
 
@@ -50,7 +50,7 @@ nameIndex n = elemIndex n . map name
 --                  section one               --
 ------------------------------------------------
 
--- unlines changes e.x. ["a", "b"] to "a\nb\n"
+-- unlines changes e.x. ["London", "Paris"] to "London\nParis\n"
 getCityNames :: [City] -> String
 getCityNames = unlines . map name
 
@@ -62,19 +62,19 @@ getPrettyNames = ("\nCities:\n\n" ++) . unlines . map (("* " ++) . name)
 --                  section two               --
 ------------------------------------------------
 
--- return Nothing if int is above max
-maybeInt :: Int -> Int -> Maybe Int
-maybeInt x max
+-- return Nothing if num is above max
+maybeNum :: (Ord a, Num a) => a -> a -> Maybe a
+maybeNum x max
   | x >= 0 && x < max = Just x
   | otherwise = Nothing
 
 maybeCity :: Maybe Int -> Maybe City
 maybeCity (Just i) = Just $ testData !! i
-maybeCity _        = Nothing
+maybeCity _ = Nothing
 
 maybePopLength :: Maybe City -> Maybe Int
-maybePopLength (Just city) = Just $ (length . populationRecord) city
-maybePopLength _           = Nothing
+maybePopLength (Just city) = Just $ (length . populations) city
+maybePopLength _ = Nothing
 
 -- take a user or program supplied string + int, convert to
 -- to (Just a) / Nothing values using above functions
@@ -83,32 +83,39 @@ convertInputs n yr cs = do
   let city = maybeCity $ n `nameIndex` cs
   -- (x =<< y) == maybe Nothing (x :: -> b -> Maybe a) (y :: -> Maybe b)
   -- very neat shorthand :D
-  (city, maybeInt yr =<< maybePopLength city)
+  (city, maybeNum yr =<< maybePopLength city)
 
-getPopulationString :: (Maybe City, Maybe Int) -> String
-getPopulationString (Just c, Just i) = (formatPopulation . toFloat) $ populationRecord c !! i
-getPopulationString _ = "no data"
+getYearData :: (Maybe City, Maybe Int) -> String
+getYearData (Just c, Just i) = (roundPopulation . toFloat) $ populations c !! i
+getYearData _ = "no data"
 
--- format population from  X thousands to X millions (to 3 d.p.)
 -- use flip so that we flip the order / takes its arguments
 -- (so we can make this pointfree)
-formatPopulation :: Float -> String
-formatPopulation = printf "%.3fm" . (/) 1000
+roundPopulation :: Float -> String
+roundPopulation = printf "%.3fm" . flip (/) 1000
 
 getPopulation :: String -> Int -> [City] -> String
-getPopulation n yr = getPopulationString . convertInputs n yr
+getPopulation n yr = getYearData . convertInputs n yr
 
 --------------------------------------------------
 --                  section three               --
 --------------------------------------------------
 
 getPopulationPair :: [Int] -> (String, String)
-getPopulationPair (f : s : _) = (format f, format s) where format = formatPopulation . toFloat
+getPopulationPair (f : s : _) = (fmt f, fmt s)
+  where
+    fmt = roundPopulation . toFloat
 
 getCityData :: City -> String
 getCityData c = do
-  let (popCur, popLast) = getPopulationPair $ populationRecord c
-  printf "%-12s   %12d   %12d   %12s   %12s" (name c) (degNorth c) (degEast c) popCur popLast
+  let (popCur, popLast) = getPopulationPair $ populations c
+  printf
+    "%-12s   %12d   %12d   %12s   %12s"
+    (name c)
+    (degNorth c)
+    (degEast c)
+    popCur
+    popLast
 
 citiesToString :: [City] -> String
 citiesToString = unlines . map getCityData
@@ -118,8 +125,14 @@ citiesToString = unlines . map getCityData
 
 getCityTableData :: City -> String
 getCityTableData c = do
-  let (popCur, popLast) = getPopulationPair $ populationRecord c
-  printf "\n| %-12s | %12d | %12d | %12s | %12s |" (name c) (degNorth c) (degEast c) popCur popLast
+  let (popCur, popLast) = getPopulationPair $ populations c
+  printf
+    "\n| %-12s | %12d | %12d | %12s | %12s |"
+    (name c)
+    (degNorth c)
+    (degEast c)
+    popCur
+    popLast
 
 citiesToTable :: [City] -> String
 citiesToTable = (++) header . foldr ((++) . getCityTableData) columnLine
@@ -139,7 +152,7 @@ columnLine = "\n+" ++ intercalate "+" (replicate 5 "--------------") ++ "+"
 -------------------------------------------------
 
 addYearToRecord :: (City, Int) -> City
-addYearToRecord (c, x) = City (name c) (degNorth c) (degEast c) (x : populationRecord c)
+addYearToRecord (c, x) = City (name c) (degNorth c) (degEast c) (x : populations c)
 
 -- todo : we shouldn't nuke cities that aren't updated
 updatePopulations :: [City] -> [Int] -> [City]
@@ -170,7 +183,7 @@ calcFigures [c, p] = [toFloat (c - p) / toFloat p * 100]
 calcFigures (c : p : ys) = calcFigures [c, p] ++ calcFigures (p : ys)
 
 getGrowth :: String -> [City] -> [Float]
-getGrowth n cs = (maybe [] (calcFigures . populationRecord) . maybeCity) $ nameIndex n cs
+getGrowth n cs = (maybe [] (calcFigures . populations) . maybeCity) $ nameIndex n cs
 
 formatGrowthFigures :: String -> [City] -> String
 formatGrowthFigures c cs = unlines $ map show $ getGrowth c cs
@@ -183,7 +196,7 @@ distanceBetween :: Location -> Location -> Float
 distanceBetween (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
 
 higherPopulation :: Int -> City -> Bool
-higherPopulation = flip $ (>) . head . populationRecord
+higherPopulation = flip $ (>) . head . populations
 
 zipLocations :: [City] -> [Location]
 zipLocations c = zip (map degNorth c) (map degEast c)
@@ -209,8 +222,16 @@ demo :: Int -> IO ()
 demo 1 = putStr $ getCityNames testData
 demo 2 = putStrLn $ getPopulation "Madrid" 2 testData
 demo 3 = putStr $ citiesToString testData
-demo 4 = putStr $ formatNewPopulations [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800] testData
-demo 5 = putStr $ formatNewCities (City "Prague" 50 14 [1312, 1306, 1299, 1292]) testData
+demo 4 =
+  putStr $
+    formatNewPopulations
+      [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
+      testData
+demo 5 =
+  putStr $
+    formatNewCities
+      (City "Prague" 50 14 [1312, 1306, 1299, 1292])
+      testData
 demo 6 = putStr $ formatGrowthFigures "London" testData
 demo 7 = putStrLn $ findNearestCity (54, 6) 2000 testData
 -- WIP
@@ -240,24 +261,37 @@ writeAt position text = do
 --                  population map                  --
 ------------------------------------------------------
 
-writeBox :: Location -> String -> String -> IO ()
-writeBox (n, e) name pop = do
-  writeAt (n, e) ("+ " ++ name)
-  writeAt (n, e + 2) pop
+writeCityPlot :: Location -> String -> String -> IO ()
+writeCityPlot (n, e) name pop = do
+  -- there is some warping of distance between points here,
+  -- but it is (to my knowledge) necessary in order to
+  -- leave the space necessary to write the name + population.
+
+  -- less warping on the x axis is possible if the y axis is
+  -- warped, but then there is very little space left on the screen
+
+  -- scale up the co-ordinate, then remove arbitrary number
+  -- so that they fit to the terminal window
+  let x = round (toFloat $ abs (n * 4 - 200))
+  -- add one because y = 0 has some funky behaviour on my terminal
+  let y = e + 1
+  writeAt (x, y) ("+ " ++ name ++ " " ++ pop)
+
+--writeAt(x, y) ("+" ++ printf "%i %i (%i %i)" x y n e)
 
 drawCity :: City -> IO ()
 drawCity city = do
   let location = (degNorth city, degEast city)
   let cityName = name city
-  let population = getPopulationString (Just city, Just 0)
-  writeBox location cityName population
+  let population = getYearData (Just city, Just 0)
+  writeCityPlot location cityName population
 
--- we need mapM because just {f}map returns [IO ()] which we can't print
--- mapM_ because we don't care about outputting the end result [(), (), ...]
+-- we need mapM_ because just fmap returns [IO ()]
 drawCities :: [City] -> IO ()
 drawCities c = do
   clearScreen
   mapM_ drawCity c
+  goTo (0, 30)
 
 ------------------------------------------------------
 --                  user interface                  --
@@ -307,8 +341,10 @@ loopChoices cities = do
       return new
     _ -> return cities
 
-  -- convert cities from [City] to a newline separated String to write to the file
-  if choice /= "9" then loopChoices cities else return (concatMap ((++ "\n") . show) cities)
+  -- convert cities from [City] to a newline separated String to write to file
+  if choice == "9"
+    then return (concatMap ((++ "\n") . show) cities)
+    else loopChoices cities
 
 main :: IO ()
 main = do
@@ -358,7 +394,7 @@ doPopulationIO cities = do
   idx <- doGetInt
   case idx of
     (Just i) -> putStrLn $ "\nPopulation: " ++ getPopulation city i cities
-    Nothing  -> putStrLn "Invalid index"
+    Nothing -> putStrLn "Invalid index"
 
 doAnnualGrowthIO :: [City] -> IO ()
 doAnnualGrowthIO cs = do
@@ -376,7 +412,7 @@ doInsertNewCityIO cities = do
   degNorth <- doGetInt
   putStr "Please enter degrees east:\n> "
   degEast <- doGetInt
-  putStrLn "Please enter population figures (from most recent, at least two entries)"
+  putStrLn "Please enter population figures (from most recent, 2+ entries)"
   populations <- doGetListOfInts
   case (degNorth, degEast) of
     (Just dN, Just dE) -> return (cities ++ [City name dN dE populations])
