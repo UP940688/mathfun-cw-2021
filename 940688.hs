@@ -59,6 +59,13 @@ nameIndex = (. map name) . elemIndex
 wrap :: [a] -> [a] -> [a] -> [a]
 wrap headr footr mid = headr ++ mid ++ footr
 
+maybeElem :: [a] -> Maybe Int -> Maybe a
+maybeElem _ Nothing = Nothing
+maybeElem cs (Just i) = 
+  if i >= 0 && i < length cs 
+    then Just $ cs !! i 
+    else Nothing
+
 ------------------------------------------------
 --                  section one               --
 ------------------------------------------------
@@ -77,28 +84,14 @@ getPrettyNames = ("\nCities:\n\n" ++) . unlines . map (("* " ++) . name)
 --                  section two               --
 ------------------------------------------------
 
--- return Nothing if num is above max
-maybeNum :: (Ord a, Num a) => a -> a -> Maybe a
-maybeNum x y
-  | x >= 0 && x < y = Just x
-  | otherwise = Nothing
-
-maybeElem :: [a] -> Maybe Int -> Maybe a
-maybeElem cs (Just i) = Just $ cs !! i
-maybeElem _ _ = Nothing
-
 maybePopulationLength :: Maybe City -> Maybe Int
 maybePopulationLength (Just city) = Just $ (length . populations) city
 maybePopulationLength _ = Nothing
 
--- take a user or program supplied string + int, convert to
--- to (Just a) / Nothing values using above functions
 convertInputs :: String -> Int -> [City] -> (Maybe City, Maybe Int)
 convertInputs cName yr cs = do
   let city = maybeElem cs $ cName `nameIndex` cs
-  -- (x =<< y) == maybe Nothing (x :: -> b -> Maybe a) (y :: -> Maybe b)
-  -- very neat shorthand :D
-  (city, maybeNum yr =<< maybePopulationLength city)
+  (city, maybePopulationLength city)
 
 getYearData :: (Maybe City, Maybe Int) -> String
 getYearData (Just c, Just i) = roundPopulation $ populations c !! i
@@ -265,11 +258,10 @@ drawCityPlot (n, e) name pop = do
 drawCity :: City -> IO ()
 drawCity c = drawCityPlot (location c) (name c) (getYearData (Just c, Just 0))
 
--- we need mapM_ because fmap returns [IO ()]
 drawCities :: [City] -> IO ()
 drawCities c = do
   clearScreen
-  mapM_ drawCity c
+  mapM_ drawCity c -- mapM_ because map returns [IO ()] which we can't show
   -- move prompt to below mapped cities
   goTo (0, 40)
 
