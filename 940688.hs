@@ -59,12 +59,12 @@ nameIndex = (. map name) . elemIndex
 wrap :: [a] -> [a] -> [a] -> [a]
 wrap headr footr mid = headr ++ mid ++ footr
 
-maybeElem :: [a] -> Maybe Int -> Maybe a
-maybeElem _ Nothing = Nothing
-maybeElem cs (Just i) = 
-  if i >= 0 && i < length cs 
-    then Just $ cs !! i 
-    else Nothing
+-- (Just a) if the index is valid, Nothing otherwise
+maybeElemAt :: [a] -> Maybe Int -> Maybe a
+maybeElemAt cs Nothing = Nothing
+maybeElemAt cs (Just i)
+  | i >= 0 && i < length cs = Just $ cs !! i
+  | otherwise = Nothing
 
 ------------------------------------------------
 --                  section one               --
@@ -90,7 +90,7 @@ maybePopulationLength _ = Nothing
 
 convertInputs :: String -> Int -> [City] -> (Maybe City, Maybe Int)
 convertInputs cName yr cs = do
-  let city = maybeElem cs $ cName `nameIndex` cs
+  let city = maybeElemAt cs (cName `nameIndex` cs)
   (city, maybePopulationLength city)
 
 getYearData :: (Maybe City, Maybe Int) -> String
@@ -150,9 +150,6 @@ updatePopulations cs pops = do
   let a2 = zipWith addYearToRecord a pops
   a2 ++ b
 
-formatNewPopulations :: [City] -> [Int] -> String
-formatNewPopulations = (citiesToString .) . updatePopulations
-
 -------------------------------------------------
 --                  section five               --
 -------------------------------------------------
@@ -163,9 +160,6 @@ insertSorted x xs@(next : rest)
   | otherwise = x : xs
 insertSorted x [] = [x]
 
-formatNewCities :: City -> [City] -> String
-formatNewCities = (citiesToString .) . insertSorted
-
 ------------------------------------------------
 --                  section six               --
 ------------------------------------------------
@@ -175,7 +169,7 @@ calcFigures [c, p] = [toFloat (c - p) / toFloat p * 100]
 calcFigures (c : p : ys) = calcFigures [c, p] ++ calcFigures (p : ys)
 
 cityFromName :: [City] -> String -> Maybe City
-cityFromName cs = maybeElem cs . (`nameIndex` cs)
+cityFromName cs = maybeElemAt cs . (`nameIndex` cs)
 
 getGrowth :: [City] -> String -> [Float]
 getGrowth cs c = maybe [] (calcFigures . populations) $ cityFromName cs c
@@ -211,10 +205,10 @@ demo :: Int -> IO ()
 demo 1 = putStr $ getCityNames testData
 demo 2 = putStrLn $ getPopulation "Madrid" 2 testData
 demo 3 = putStr $ citiesToString testData
-demo 4 = putStr $ formatNewPopulations testData
+demo 4 = putStr . citiesToString $ updatePopulations testData
   [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
-demo 5 = putStr $ formatNewCities (City "Prague" 50 14 [1312, 1306, 1299, 1292])
-  testData
+demo 5 = putStr . citiesToString $ insertSorted 
+  (City "Prague" 50 14 [1312, 1306, 1299, 1292]) testData
 demo 6 = putStr $ formatGrowthFigures "London" testData
 demo 7 = putStrLn $ findNearestCity (54, 6) 2000 testData
 demo 8 = drawCities testData
