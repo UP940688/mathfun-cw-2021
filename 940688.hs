@@ -2,7 +2,7 @@
 import Data.List (elemIndex, intercalate)
 -- for pretty printing table output
 import Text.Printf (printf)
--- for parsing user input into Maybe (Type)
+-- for parsing user input into Maybe a
 import Text.Read (readMaybe)
 
 ------------------------------------------------
@@ -35,19 +35,29 @@ data City = City
 
 type Location = (Int, Int)
 
---------------------------------------------------------
---                  helper functions                  --
---------------------------------------------------------
-
--- means we can do (toFloat x) rather than (fromIntegral x :: Float)
-toFloat :: Int -> Float
-toFloat = fromIntegral
-
+-- accompanying function for above
 location :: City -> Location
 location c = (north c, east c)
 
+--------------------------------------------------------
+--                 multi-use functions                --
+--------------------------------------------------------
+
+-- means we can do (toFloat x) rather than (fromIntegral x :: Float)
+-- thanks to the type inference
+toFloat :: Integral a => a -> Float
+toFloat = fromIntegral
+
+-- divide by 1000 to convert from 1000s to millions
+roundPopulation :: Integral a => a -> String
+roundPopulation = printf "%.3fm" . (/1000) . toFloat
+
 nameIndex :: String -> [City] -> Maybe Int
-nameIndex n = elemIndex n . map name
+nameIndex = (. map name) . elemIndex
+
+-- wrap type [a] either side with type [a]
+wrap :: [a] -> [a] -> [a] -> [a]
+wrap headr footr mid = headr ++ mid ++ footr
 
 ------------------------------------------------
 --                  section one               --
@@ -57,7 +67,9 @@ nameIndex n = elemIndex n . map name
 getCityNames :: [City] -> String
 getCityNames = unlines . map name
 
--- for main, output a nicer formatted list
+-- for user interface, output a nicer formatted list
+-- we could potentially do ... map ("* " ++) . lines . getCityNames
+-- but it doesn't really improve readability much and means more list traversals
 getPrettyNames :: [City] -> String
 getPrettyNames = ("\nCities:\n\n" ++) . unlines . map (("* " ++) . name)
 
@@ -67,35 +79,30 @@ getPrettyNames = ("\nCities:\n\n" ++) . unlines . map (("* " ++) . name)
 
 -- return Nothing if num is above max
 maybeNum :: (Ord a, Num a) => a -> a -> Maybe a
-maybeNum x max
-  | x >= 0 && x < max = Just x
+maybeNum x y
+  | x >= 0 && x < y = Just x
   | otherwise = Nothing
 
-maybeCity :: Maybe Int -> Maybe City
-maybeCity (Just i) = Just $ testData !! i
-maybeCity _ = Nothing
+maybeElem :: [a] -> Maybe Int -> Maybe a
+maybeElem cs (Just i) = Just $ cs !! i
+maybeElem _ _ = Nothing
 
-maybePopLength :: Maybe City -> Maybe Int
-maybePopLength (Just city) = Just $ (length . populations) city
-maybePopLength _ = Nothing
+maybePopulationLength :: Maybe City -> Maybe Int
+maybePopulationLength (Just city) = Just $ (length . populations) city
+maybePopulationLength _ = Nothing
 
 -- take a user or program supplied string + int, convert to
 -- to (Just a) / Nothing values using above functions
 convertInputs :: String -> Int -> [City] -> (Maybe City, Maybe Int)
 convertInputs cName yr cs = do
-  let city = maybeCity $ cName `nameIndex` cs
+  let city = maybeElem cs $ cName `nameIndex` cs
   -- (x =<< y) == maybe Nothing (x :: -> b -> Maybe a) (y :: -> Maybe b)
   -- very neat shorthand :D
-  (city, maybeNum yr =<< maybePopLength city)
+  (city, maybeNum yr =<< maybePopulationLength city)
 
 getYearData :: (Maybe City, Maybe Int) -> String
-getYearData (Just c, Just i) = (roundPopulation . toFloat) $ populations c !! i
+getYearData (Just c, Just i) = roundPopulation $ populations c !! i
 getYearData _ = "no data"
-
--- use flip so that we flip the order / takes its arguments
--- (so we can make this pointfree)
-roundPopulation :: Float -> String
-roundPopulation = printf "%.3fm" . flip (/) 1000
 
 getPopulation :: String -> Int -> [City] -> String
 getPopulation n yr = getYearData . convertInputs n yr
@@ -105,9 +112,7 @@ getPopulation n yr = getYearData . convertInputs n yr
 --------------------------------------------------
 
 getPopulationPair :: [Int] -> (String, String)
-getPopulationPair (f : s : _) = (fmt f, fmt s)
-  where
-    fmt = roundPopulation . toFloat
+getPopulationPair (f : s : _) = (roundPopulation f, roundPopulation s)
 
 getCityData :: City -> String
 getCityData c = do
@@ -128,44 +133,45 @@ getCityTableData c = do
     (name c) (north c) (east c) popCur popLast
 
 citiesToTable :: [City] -> String
-citiesToTable = (++) header . foldr ((++) . getCityTableData) columnLine
+citiesToTable = wrap header columnLine . concatMap getCityTableData
 
 header :: String
 header =
-  printf
-    "%s\n|     Name     |  Deg. North  |   Deg. East  |  Population  |  Last Years  |%s"
-    columnLine
-    columnLine
+  printf ( "%s\n|     Name     |  Deg. North  |   Deg. East  |"
+      ++ "  Population  |  Last Years  |%s"
+    ) columnLine columnLine
 
 columnLine :: String
-columnLine = "\n+" ++ intercalate "+" (replicate 5 "--------------") ++ "+"
+columnLine = wrap "\n+" "+" $ intercalate "+" (replicate 5 "--------------")
 
 -------------------------------------------------
 --                  section four               --
 -------------------------------------------------
 
-addYearToRecord :: (City, Int) -> City
-addYearToRecord (c, x) = City (name c) (north c) (east c) (x : populations c)
+addYearToRecord :: City -> Int -> City
+addYearToRecord c x = City (name c) (north c) (east c) (x : populations c)
 
--- todo : we shouldn't nuke cities that aren't updated
 updatePopulations :: [City] -> [Int] -> [City]
-updatePopulations = zipWith (curry addYearToRecord)
+updatePopulations cs pops = do
+  let (a, b) = splitAt (length pops) cs
+  let a2 = zipWith addYearToRecord a pops
+  a2 ++ b
 
-formatNewPopulations :: [Int] -> [City] -> String
-formatNewPopulations = (citiesToString .) . flip updatePopulations
+formatNewPopulations :: [City] -> [Int] -> String
+formatNewPopulations = (citiesToString .) . updatePopulations
 
 -------------------------------------------------
 --                  section five               --
 -------------------------------------------------
 
-sortedInsert :: (Ord a, Ord a) => a -> [a] -> [a]
-sortedInsert c cs@(next : rest)
-  | c > next = next : sortedInsert c rest
-  | otherwise = c : cs
-sortedInsert c [] = [c]
+insertSorted :: (Ord a) => a -> [a] -> [a]
+insertSorted x xs@(next : rest)
+  | x > next = next : insertSorted x rest
+  | otherwise = x : xs
+insertSorted x [] = [x]
 
 formatNewCities :: City -> [City] -> String
-formatNewCities = (citiesToString .) . sortedInsert
+formatNewCities = (citiesToString .) . insertSorted
 
 ------------------------------------------------
 --                  section six               --
@@ -175,31 +181,31 @@ calcFigures :: [Int] -> [Float]
 calcFigures [c, p] = [toFloat (c - p) / toFloat p * 100]
 calcFigures (c : p : ys) = calcFigures [c, p] ++ calcFigures (p : ys)
 
-getGrowth :: String -> [City] -> [Float]
-getGrowth n cs = (maybe [] (calcFigures . populations) . maybeCity) $ nameIndex n cs
+cityFromName :: [City] -> String -> Maybe City
+cityFromName cs = maybeElem cs . (`nameIndex` cs)
+
+getGrowth :: [City] -> String -> [Float]
+getGrowth cs c = maybe [] (calcFigures . populations) $ cityFromName cs c
 
 formatGrowthFigures :: String -> [City] -> String
-formatGrowthFigures c cs = unlines $ map show $ getGrowth c cs
+formatGrowthFigures c cs = unlines [show g | g <- getGrowth cs c]
 
 --------------------------------------------------
 --                  section seven               --
 --------------------------------------------------
 
-distanceBetween :: Location -> Location -> Float
-distanceBetween (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
-
-higherPopulation :: Int -> City -> Bool
-higherPopulation = flip $ (>) . head . populations
+distance :: Location -> Location -> Float
+distance (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
 
 getNameFromList :: [City] -> Int -> String
 getNameFromList = (name .) . (!!)
 
 findNearestCity :: Location -> Int -> [City] -> String
-findNearestCity loc population cities = do
+findNearestCity loc pop cs = do
   -- first filter out all the cities with a lower population
-  let candidates = filter (higherPopulation population) cities
+  let candidates = [c | c <- cs, head (populations c) > pop]
   -- then get [Float] array of their distances
-  let distances = map (distanceBetween loc . location) candidates
+  let distances = map (distance loc . location) candidates
   -- get index of city with smallest distance (Maybe Int)
   let idx = elemIndex (minimum distances) distances
   maybe "no city" (getNameFromList candidates) idx
@@ -212,19 +218,12 @@ demo :: Int -> IO ()
 demo 1 = putStr $ getCityNames testData
 demo 2 = putStrLn $ getPopulation "Madrid" 2 testData
 demo 3 = putStr $ citiesToString testData
-demo 4 =
-  putStr $
-    formatNewPopulations
-      [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
-      testData
-demo 5 =
-  putStr $
-    formatNewCities
-      (City "Prague" 50 14 [1312, 1306, 1299, 1292])
-      testData
+demo 4 = putStr $ formatNewPopulations testData
+  [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
+demo 5 = putStr $ formatNewCities (City "Prague" 50 14 [1312, 1306, 1299, 1292])
+  testData
 demo 6 = putStr $ formatGrowthFigures "London" testData
 demo 7 = putStrLn $ findNearestCity (54, 6) 2000 testData
--- WIP
 demo 8 = drawCities testData
 
 ----------------------------------------------------
@@ -251,33 +250,28 @@ writeAt position text = do
 --                  population map                  --
 ------------------------------------------------------
 
-writeCityPlot :: Location -> String -> String -> IO ()
-writeCityPlot (n, e) name pop = do
-  -- there is some warping of distance between points here,
-  -- but it is (to my knowledge) necessary in order to
-  -- leave the space necessary to write the name + population.
-
-  -- less warping on the x axis is possible if the y axis is
-  -- warped, but then there is very little space left on the screen
-
-  -- scale up the co-ordinate, then remove arbitrary number
-  -- so that they fit to the terminal window
-  let x = round (toFloat $ abs (n * 4 - 200))
-  -- add one because y = 0 has some funky behaviour on my terminal
-  let y = e + 1
-  writeAt (x, y) ("+ " ++ name ++ " " ++ pop)
-
---writeAt(x, y) ("+" ++ printf "%i %i (%i %i)" x y n e)
+drawCityPlot :: Location -> String -> String -> IO ()
+drawCityPlot (n, e) name pop = do
+  -- multiply n + e by 2 to increase distance between points
+  -- giving enough space to plot the population below city name
+  let x = e * 2
+  -- abs $ n - 54 (one larger than highest city) to invert y axis
+  -- otherwise we're looking at the world upsidedown
+  let y = round $ toFloat $ abs (n - 54) * 2
+  writeAt (x, y) ("+ " ++ name)
+  -- write population below city, otherwise populations + other cities overlap
+  writeAt (x, y+1) pop
 
 drawCity :: City -> IO ()
-drawCity c = writeCityPlot (location c) (name c) (getYearData (Just c, Just 0))
+drawCity c = drawCityPlot (location c) (name c) (getYearData (Just c, Just 0))
 
--- we need mapM_ because just fmap returns [IO ()]
+-- we need mapM_ because fmap returns [IO ()]
 drawCities :: [City] -> IO ()
 drawCities c = do
   clearScreen
   mapM_ drawCity c
-  goTo (0, 30)
+  -- move prompt to below mapped cities
+  goTo (0, 40)
 
 ------------------------------------------------------
 --                  user interface                  --
@@ -322,7 +316,7 @@ loopChoices cs = do
       putStrLn $ citiesToTable new
       return new
     "5" -> do
-      new <- dosortedInsertIO cs
+      new <- doinsertSortedIO cs
       putStrLn $ citiesToTable new
       return new
     _ -> return cs
@@ -348,7 +342,7 @@ doFindCityIO cs = do
   putStr "Please enter minimum population city should have:\n> "
   minPopulation <- doGetInt
   case (north, east, minPopulation) of
-    (Just dN, Just dE, Just pop) -> do
+    (Just dN, Just dE, Just pop) ->
       putStrLn $ "\nNearest City: " ++ findNearestCity (dN, dE) pop cs
     _ -> putStrLn "Invalid population figure entered."
 
@@ -385,14 +379,16 @@ doPopulationIO cities = do
 doAnnualGrowthIO :: [City] -> IO ()
 doAnnualGrowthIO cs = do
   n <- doCityNameIO
-  putStrLn $ "\nAnnual Growth Figures:\n" ++ unlines (printf "* %.2f%%" <$> getGrowth n cs)
+  putStrLn $
+    "\nAnnual Growth Figures:\n"
+      ++ unlines (printf "* %.2f%%" <$> getGrowth cs n)
 
 -- <$> is the infix shortcut for fmap
 doUpdatePopulationIO :: [City] -> IO [City]
 doUpdatePopulationIO cs = updatePopulations cs <$> doGetListOfInts
 
-dosortedInsertIO :: [City] -> IO [City]
-dosortedInsertIO cs = do
+doinsertSortedIO :: [City] -> IO [City]
+doinsertSortedIO cs = do
   name <- doCityNameIO
   putStr "Please enter degrees north:\n> "
   north <- doGetInt
@@ -401,7 +397,7 @@ dosortedInsertIO cs = do
   putStrLn "Please enter population figures (from most recent, 2+ entries)"
   populations <- doGetListOfInts
   case (north, east) of
-    (Just n, Just e) -> return (cs ++ [City name n e populations])
+    (Just n, Just e) -> return (insertSorted (City name n e populations) cs)
     _ -> do
       putStrLn "Invalid data given, not adding city"
       return cs
