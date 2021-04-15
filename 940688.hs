@@ -1,11 +1,9 @@
 -- for finding index of element and table formatting
-import Data.List     (elemIndex, intercalate)
+import Data.List (elemIndex, intercalate)
 -- for pretty printing table output
-import Text.Printf   (printf)
--- for monad related function application
-import Control.Monad (ap)
+import Text.Printf (printf)
 -- for parsing user input into Maybe a
-import Text.Read     (readMaybe)
+import Text.Read (readMaybe)
 
 ------------------------------------------------
 --                   types                    --
@@ -13,47 +11,51 @@ import Text.Read     (readMaybe)
 
 testData :: [City]
 testData =
-  [ City "Amsterdam" 52  5 [  1158,  1149,  1140,  1132],
-    City "Athens"    38 23 [  3153,  3153,  3154,  3156],
-    City "Berlin"    53 13 [  3567,  3562,  3557,  3552],
-    City "Brussels"  51  4 [  2096,  2081,  2065,  2050],
-    City "Bucharest" 44 26 [  1794,  1803,  1812,  1821],
-    City "London"    52  0 [  9426,  9304,  9177,  9046],
-    City "Madrid"    40  4 [  6669,  6618,  6559,  6497],
-    City "Paris"     49  2 [ 11079, 11017, 10958, 10901],
-    City "Rome"      42 13 [  4278,  4257,  4234,  4210],
-    City "Sofia"     43 23 [  1284,  1281,  1277,  1272],
-    City "Vienna"    48 16 [  1945,  1930,  1915,  1901],
-    City "Warsaw"    52 21 [  1790,  1783,  1776,  1768]
+  [ City "Amsterdam" 52 5 [1158, 1149, 1140, 1132],
+    City "Athens" 38 23 [3153, 3153, 3154, 3156],
+    City "Berlin" 53 13 [3567, 3562, 3557, 3552],
+    City "Brussels" 51 4 [2096, 2081, 2065, 2050],
+    City "Bucharest" 44 26 [1794, 1803, 1812, 1821],
+    City "London" 52 0 [9426, 9304, 9177, 9046],
+    City "Madrid" 40 4 [6669, 6618, 6559, 6497],
+    City "Paris" 49 2 [11079, 11017, 10958, 10901],
+    City "Rome" 42 13 [4278, 4257, 4234, 4210],
+    City "Sofia" 43 23 [1284, 1281, 1277, 1272],
+    City "Vienna" 48 16 [1945, 1930, 1915, 1901],
+    City "Warsaw" 52 21 [1790, 1783, 1776, 1768]
   ]
 
 data City = City
-  { name        :: String,
-    north       :: Int,
-    east        :: Int,
+  { name :: String,
+    north :: Int,
+    east :: Int,
     populations :: [Int]
   }
   deriving (Eq, Ord, Show, Read)
 
 -- convenience types for easier reading
 type Location = (Int, Int)
+
 type Population = Int
+
 type Index = Int
+
 type Distance = Float
+
 type Growth = Float
+
 type StringPopulation = String
+
 type Name = String
 
 --------------------------------------------------------
---                 multi-use functions                --
+--                  helper functions                  --
 --------------------------------------------------------
 
--- means we can do (toFloat x) rather than (fromIntegral x :: Float)
--- thanks to the type inference
 toFloat :: Integral a => a -> Float
 toFloat = fromIntegral
 
--- divide by 1000 to convert from 1000s to millions
+-- divide by 1000 to convert from x 1000s to x millions
 fmtPopulation :: Population -> StringPopulation
 fmtPopulation = printf "%.3fm" . (/ 1000) . toFloat
 
@@ -81,11 +83,11 @@ cityFromName cs nm = maybeElemAt cs $ nameIndex cs nm
 ------------------------------------------------
 
 -- unlines changes e.x. ["London", "Paris"] to "London\nParis\n"
-getNamesString :: [City] -> String
-getNamesString = unlines . getNames
+getNames :: [City] -> String
+getNames = unlines . names
 
-getNames :: [City] -> [Name]
-getNames = map name
+names :: [City] -> [Name]
+names = map name
 
 -- for user interface, output a nicer formatted list
 getPrettyNamesString :: [City] -> String
@@ -96,11 +98,11 @@ getPrettyNamesString = ("\nCities:\n\n" ++) . unlines . map (("* " ++) . name)
 ------------------------------------------------
 
 getPopulation :: [City] -> Name -> Index -> StringPopulation
-getPopulation = (populationYearsAgo .) . cityFromName
+getPopulation = (populationIndex .) . cityFromName
 
-populationYearsAgo :: Maybe City -> Index -> StringPopulation
-Nothing `populationYearsAgo` _ = "no data"
-(Just c) `populationYearsAgo` x
+populationIndex :: Maybe City -> Index -> StringPopulation
+Nothing `populationIndex` _ = "no data"
+(Just c) `populationIndex` x
   | x >= 0 && x < (length . populations) c = fmtPopulation $ populations c !! x
   | otherwise = "no data"
 
@@ -123,8 +125,7 @@ wrap :: [a] -> [a] -> [a] -> [a]
 wrap headr footr = (headr ++) . (++ footr)
 
 header :: String
-header = printf
-    ( "%s|     Name     |  Deg. North  |   Deg. East  |"
+header = printf ( "%s|     Name     |  Deg. North  |   Deg. East  |"
         ++ "  Population  |   Previous   |\n%s"
     )
     columnLine
@@ -144,16 +145,16 @@ updatePopulations cs pops = changed ++ unchanged
     unchanged = drop (length changed) cs
 
 addYearToRecord :: City -> Population -> City
-addYearToRecord c yr = City (name c) (north c) (east c) (yr : populations c)
+addYearToRecord c p = City (name c) (north c) (east c) (p : populations c)
 
 -------------------------------------------------
 --                  section five               --
 -------------------------------------------------
 
-insertSorted :: (Ord a) => a -> [a] -> [a]
-insertSorted x [] = [x]
-insertSorted x xs@(next : rest)
-  | x > next = next : insertSorted x rest
+insertSorted :: (Ord a) => [a] -> a -> [a]
+[] `insertSorted` x = [x]
+xs@(next : rest) `insertSorted` x
+  | x > next = next : insertSorted rest x
   | otherwise = x : xs
 
 ------------------------------------------------
@@ -167,7 +168,7 @@ getGrowth :: [City] -> Name -> [Growth]
 getGrowth cs nm = maybe [] (calcGrowth . populations) $ cityFromName cs nm
 
 calcGrowth :: [Population] -> [Growth]
-calcGrowth [cur, pvs]       = [toFloat (cur - pvs) / toFloat pvs * 100]
+calcGrowth [cur, pvs] = [toFloat (cur - pvs) / toFloat pvs * 100]
 calcGrowth (cur : pvs : ys) = calcGrowth [cur, pvs] ++ calcGrowth (pvs : ys)
 
 --------------------------------------------------
@@ -195,13 +196,13 @@ distance (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
 ------------------------------------------------------
 
 demo :: Int -> IO ()
-demo 1 = putStr $ getNamesString testData
+demo 1 = putStr $ getNames testData
 demo 2 = putStrLn $ getPopulation testData "Madrid" 2
 demo 3 = putStr $ citiesToString testData
 demo 4 = putStr . citiesToString $ updatePopulations testData
-      [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
-demo 5 = putStr . citiesToString $ insertSorted
-      (City "Prague" 50 14 [1312, 1306, 1299, 1292]) testData
+  [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
+demo 5 = putStr . citiesToString $ testData `insertSorted`
+  City "Prague" 50 14 [1312, 1306, 1299, 1292]
 demo 6 = putStr $ fmtGrowthFigures testData "London"
 demo 7 = putStrLn $ nearestCityName testData (54, 6) 2000
 demo 8 = drawCities testData
@@ -232,21 +233,32 @@ writeAt position text = do
 
 -- IO is a monad, so use mapM to apply drawCity to each city
 -- just map would return [drawCity a, drawCity b, ...] (i.e. [IO ()])
+-- pass the mapped co-ords to adjustCursor
 drawCities :: [City] -> IO ()
-drawCities cs = clearScreen >> mapM_ drawCity cs >> goTo (0, 40)
+drawCities cs = clearScreen >> mapM drawCity cs >>= \res -> adjustCursor res
 
-drawCity :: City -> IO ()
-drawCity c = drawCityPlot (location c) (name c) $ Just c `populationYearsAgo` 0
-
-drawCityPlot :: Location -> Name -> StringPopulation -> IO ()
-drawCityPlot (n, e) nm pop = writeAt p1 ("+ " ++ nm) >> writeAt p2 pop
+-- move the cursor to four lines below the lowest mapped city
+adjustCursor :: [ScreenPosition] -> IO ()
+adjustCursor positions = goTo (0, lowest + 4)
   where
-    -- get abs after subtracting 54 (largest nm value in testData) to flip y
-    -- axis, multiply by 2 to proportionately increase distance between cities
-    y = round $ toFloat $ abs (n - 54) * 2
-    x = e * 2
-    p1 = (x, y)
-    p2 = (x, y + 1)
+    lowest = maximum $ map snd positions
+
+drawCity :: City -> IO ScreenPosition
+drawCity c = drawCityPlot (location c) (name c) $ Just c `populationIndex` 0
+
+-- return the position we used so we don't need to recalculate in adjustCursor
+drawCityPlot :: Location -> Name -> StringPopulation -> IO ScreenPosition
+drawCityPlot loc nm pop = do
+  writeAt (x, y) ("+ " ++ nm)
+  writeAt (x, y + 1) pop
+  return (x, y)
+  where
+    (x, y) = locationToPosition loc
+
+-- get abs after subtracting 54 (largest nm value in testData) to flip y
+-- axis, multiply by 2 to proportionately increase distance between cities
+locationToPosition :: Location -> ScreenPosition
+locationToPosition (n, e) = (e * 2, abs (n - 54) * 2)
 
 ------------------------------------------------------
 --                  user interface                  --
@@ -264,16 +276,16 @@ fileToCities = fmap (map read . lines) . readFile
 
 showOptions :: IO ()
 showOptions = putStr $ "Options:"
-      ++ "\n(1) Show names"
-      ++ "\n(2) Return population of city n years ago"
-      ++ "\n(3) Display cities data"
-      ++ "\n(4) Update data to include new population figures"
-      ++ "\n(5) Add a new city to the data"
-      ++ "\n(6) Get annual population growth percentage figs for a city"
-      ++ "\n(7) Locate nearest city to given point above given population"
-      ++ "\n(8) Draw city map"
-      ++ "\n(9) Exit"
-      ++ "\n> "
+  ++ "\n(1) Show names"
+  ++ "\n(2) Return population of city n years ago"
+  ++ "\n(3) Display cities data"
+  ++ "\n(4) Update data to include new population figures"
+  ++ "\n(5) Add a new city to the data"
+  ++ "\n(6) Get annual population growth percentage figs for a city"
+  ++ "\n(7) Locate nearest city to given point above given population"
+  ++ "\n(8) Draw city map"
+  ++ "\n(9) Exit"
+  ++ "\n> "
 
 matchChoice :: [City] -> String -> IO ()
 matchChoice cs choice
@@ -304,8 +316,8 @@ loopChoices cs = do
     _ -> return cs
 
   if choice == "9"
-    -- convert cities from [City] to newline-separated String
-    then return (unlines $ map show cs)
+    then -- convert cities from [City] to newline-separated String
+      return (unlines $ map show cs)
     else loopChoices cs
 
 doCityNameIO :: IO Name
@@ -321,7 +333,7 @@ doGetListOfInts = do
   input <- doGetInt
   case input of
     (Just x) -> doGetListOfInts >>= \xs -> return (x : xs)
-    Nothing  -> return []
+    Nothing -> return []
 
 doFindCityIO :: [City] -> IO ()
 doFindCityIO cs = do
@@ -343,7 +355,7 @@ doPopulationIO cs = do
   idx <- doGetInt
   case idx of
     (Just i) -> putStrLn $ "\nPopulation: " ++ getPopulation cs city i ++ "\n"
-    Nothing  -> putStrLn "\nInvalid index\n"
+    Nothing -> putStrLn "\nInvalid index\n"
 
 doAnnualGrowthIO :: [City] -> IO ()
 doAnnualGrowthIO cs = do
@@ -363,5 +375,5 @@ doinsertSortedIO cs = do
   putStrLn "Please enter population figures (from most recent, 2+ entries)"
   pops <- doGetListOfInts
   case (north, east) of
-    (Just n, Just e) -> return $ insertSorted (City nm n e pops) cs
+    (Just n, Just e) -> return $ cs `insertSorted` City nm n e pops
     _ -> putStrLn "Invalid data given, not adding city" >> return cs
