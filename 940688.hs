@@ -53,8 +53,11 @@ fmtPopulation = printf "%.3fm" . (/ 1000) . toFloat
 location :: City -> Location
 location c = (north c, east c)
 
-nameIndex :: String -> [City] -> Maybe Int
-nameIndex nm = elemIndex nm . map name
+locations :: [City] -> [Location]
+locations = map location
+
+nameIndex :: [City] -> String -> Maybe Int
+nameIndex = flip elemIndex . map name
 
 -- (Just a) if the index is valid, Nothing otherwise
 maybeElemAt :: [a] -> Maybe Int -> Maybe a
@@ -63,8 +66,8 @@ cs `maybeElemAt` (Just i)
   | i >= 0 && i < length cs = Just $ cs !! i
   | otherwise = Nothing
 
-cityFromName :: String -> [City] -> Maybe City
-cityFromName = ap maybeElemAt . nameIndex
+cityFromName :: [City] -> String -> Maybe City
+cityFromName cs nm = maybeElemAt cs $ nameIndex cs nm
 
 ------------------------------------------------
 --                  section one               --
@@ -85,9 +88,8 @@ getPrettyNamesString = ("\nCities:\n\n" ++) . unlines . map (("* " ++) . name)
 --                  section two               --
 ------------------------------------------------
 
-getPopulation :: String -> Int -> [City] -> String
-getPopulation nm yr cs = city `populationYearsAgo` yr
-  where city = cityFromName nm cs
+getPopulation :: [City] -> String -> Int -> String
+getPopulation = (populationYearsAgo .) . cityFromName
 
 populationYearsAgo :: Maybe City -> Int -> String
 Nothing `populationYearsAgo` _ = "no data"
@@ -111,7 +113,7 @@ getPopulationPair :: [Int] -> (String, String)
 getPopulationPair (cur : pvs : _) = (fmtPopulation cur, fmtPopulation pvs)
 
 wrap :: [a] -> [a] -> [a] -> [a]
-wrap headr footr mid = headr ++ mid ++ footr
+wrap headr footr = (headr ++) . (++ footr)
 
 header :: String
 header = printf
@@ -151,10 +153,10 @@ insertSorted x xs@(next : rest)
 --                  section six               --
 ------------------------------------------------
 
-fmtGrowthFigures :: String -> [City] -> String
+fmtGrowthFigures :: [City] -> String -> String
 fmtGrowthFigures c cs = unlines [show g | g <- getGrowth c cs]
 
-getGrowth :: String -> [City] -> [Float]
+getGrowth :: [City] -> String -> [Float]
 getGrowth nm = maybe [] (calcFigures . populations) . cityFromName nm
 
 calcFigures :: [Int] -> [Float]
@@ -165,18 +167,18 @@ calcFigures (cur : pvs : ys) = calcFigures [cur, pvs] ++ calcFigures (pvs : ys)
 --                  section seven               --
 --------------------------------------------------
 
-nearestCityName :: Location -> Int -> [City] -> String
-nearestCityName loc pop cs = maybe "no data" name (nearestCity loc pop cs)
+nearestCityName :: [City] -> Location -> Int -> String
+nearestCityName cs loc pop = maybe "no data" name (nearestCity cs loc pop)
 
-nearestCity :: Location -> Int -> [City] -> Maybe City
-nearestCity loc pop cs = idx >>= \i -> Just (cs !! i)
+nearestCity :: [City] -> Location -> Int -> Maybe City
+nearestCity cs target pop = idx >>= \i -> Just (cs !! i)
   where
     candidates = [c | c <- cs, head (populations c) > pop]
-    dists = distancesTo loc candidates
+    dists = target `distancesFrom` locations cs
     idx = elemIndex (minimum dists) dists
 
-distancesTo :: Location -> [City] -> [Float]
-distancesTo loc = map (distance loc . location)
+distancesFrom :: Location -> [Location] -> [Float]
+distancesFrom = map . distance
 
 distance :: Location -> Location -> Float
 distance (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
@@ -187,14 +189,14 @@ distance (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
 
 demo :: Int -> IO ()
 demo 1 = putStr $ getNamesString testData
-demo 2 = putStrLn $ getPopulation "Madrid" 2 testData
+demo 2 = putStrLn $ getPopulation testData "Madrid" 2
 demo 3 = putStr $ citiesToString testData
 demo 4 = putStr . citiesToString $ updatePopulations testData
       [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
 demo 5 = putStr . citiesToString $ insertSorted
       (City "Prague" 50 14 [1312, 1306, 1299, 1292]) testData
-demo 6 = putStr $ fmtGrowthFigures "London" testData
-demo 7 = putStrLn $ nearestCityName (54, 6) 2000 testData
+demo 6 = putStr $ fmtGrowthFigures testData "London"
+demo 7 = putStrLn $ nearestCityName testData (54, 6) 2000
 demo 8 = drawCities testData
 
 ----------------------------------------------------
@@ -266,8 +268,8 @@ showOptions = putStr $ "Options:"
       ++ "\n(9) Exit"
       ++ "\n> "
 
-matchChoice :: String -> [City] -> IO ()
-matchChoice choice cs
+matchChoice :: [City] -> String -> IO ()
+matchChoice cs choice
   | choice == "1" = putStrLn $ getPrettyNamesString cs
   | choice == "2" = doPopulationIO cs
   | choice == "3" = putStr $ citiesToString cs
@@ -281,7 +283,7 @@ loopChoices :: [City] -> IO String
 loopChoices cs = do
   showOptions
   choice <- getLine
-  matchChoice choice cs
+  matchChoice cs choice
   -- separate case to reduce complexity of above
   cs <- case choice of
     "4" -> do
@@ -324,7 +326,7 @@ doFindCityIO cs = do
   minPopulation <- doGetInt
   case (north, east, minPopulation) of
     (Just n, Just e, Just pop) ->
-      putStrLn $ "\nNearest City: " ++ nearestCityName (n, e) pop cs ++ "\n"
+      putStrLn $ "\nNearest City: " ++ nearestCityName cs (n, e) pop ++ "\n"
     _ -> putStrLn "\nInvalid population figure entered.\n"
 
 doPopulationIO :: [City] -> IO ()
@@ -333,13 +335,13 @@ doPopulationIO cs = do
   putStr "Please enter how many years ago to get records (0 for current)\n> "
   idx <- doGetInt
   case idx of
-    (Just i) -> putStrLn $ "\nPopulation: " ++ getPopulation city i cs ++ "\n"
+    (Just i) -> putStrLn $ "\nPopulation: " ++ getPopulation cs city i ++ "\n"
     Nothing  -> putStrLn "\nInvalid index\n"
 
 doAnnualGrowthIO :: [City] -> IO ()
 doAnnualGrowthIO cs = do
   nm <- doCityNameIO
-  let growth = unlines $ printf "* %.2f%%" <$> getGrowth nm cs
+  let growth = unlines $ printf "* %.2f%%" <$> getGrowth cs nm
   if null growth
     then putStrLn "\nNo data available.\n"
     else putStrLn $ "\nAnnual Growth Figures:\n" ++ growth
