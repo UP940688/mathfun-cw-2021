@@ -35,7 +35,14 @@ data City = City
   }
   deriving (Eq, Ord, Show, Read)
 
+-- convenience types for easier reading
 type Location = (Int, Int)
+type Population = Int
+type Index = Int
+type Distance = Float
+type Growth = Float
+type StringPopulation = String
+type Name = String
 
 --------------------------------------------------------
 --                 multi-use functions                --
@@ -47,7 +54,7 @@ toFloat :: Integral a => a -> Float
 toFloat = fromIntegral
 
 -- divide by 1000 to convert from 1000s to millions
-fmtPopulation :: Integral a => a -> String
+fmtPopulation :: Population -> StringPopulation
 fmtPopulation = printf "%.3fm" . (/ 1000) . toFloat
 
 location :: City -> Location
@@ -56,17 +63,17 @@ location c = (north c, east c)
 locations :: [City] -> [Location]
 locations = map location
 
-nameIndex :: [City] -> String -> Maybe Int
+nameIndex :: [City] -> Name -> Maybe Index
 nameIndex = flip elemIndex . map name
 
 -- (Just a) if the index is valid, Nothing otherwise
-maybeElemAt :: [a] -> Maybe Int -> Maybe a
+maybeElemAt :: [a] -> Maybe Index -> Maybe a
 _ `maybeElemAt` Nothing = Nothing
 cs `maybeElemAt` (Just i)
   | i >= 0 && i < length cs = Just $ cs !! i
   | otherwise = Nothing
 
-cityFromName :: [City] -> String -> Maybe City
+cityFromName :: [City] -> Name -> Maybe City
 cityFromName cs nm = maybeElemAt cs $ nameIndex cs nm
 
 ------------------------------------------------
@@ -77,7 +84,7 @@ cityFromName cs nm = maybeElemAt cs $ nameIndex cs nm
 getNamesString :: [City] -> String
 getNamesString = unlines . getNames
 
-getNames :: [City] -> [String]
+getNames :: [City] -> [Name]
 getNames = map name
 
 -- for user interface, output a nicer formatted list
@@ -88,10 +95,10 @@ getPrettyNamesString = ("\nCities:\n\n" ++) . unlines . map (("* " ++) . name)
 --                  section two               --
 ------------------------------------------------
 
-getPopulation :: [City] -> String -> Int -> String
+getPopulation :: [City] -> Name -> Index -> StringPopulation
 getPopulation = (populationYearsAgo .) . cityFromName
 
-populationYearsAgo :: Maybe City -> Int -> String
+populationYearsAgo :: Maybe City -> Index -> StringPopulation
 Nothing `populationYearsAgo` _ = "no data"
 (Just c) `populationYearsAgo` x
   | x >= 0 && x < (length . populations) c = fmtPopulation $ populations c !! x
@@ -109,7 +116,7 @@ getCityData c = printf "| %-12s | %12d | %12d | %12s | %12s |\n"
   (name c) (north c) (east c) cur pvs
   where (cur, pvs) = getPopulationPair $ populations c
 
-getPopulationPair :: [Int] -> (String, String)
+getPopulationPair :: [Population] -> (StringPopulation, StringPopulation)
 getPopulationPair (cur : pvs : _) = (fmtPopulation cur, fmtPopulation pvs)
 
 wrap :: [a] -> [a] -> [a] -> [a]
@@ -130,13 +137,13 @@ columnLine = wrap "+" "+\n" $ intercalate "+" (replicate 5 "--------------")
 --                  section four               --
 -------------------------------------------------
 
-updatePopulations :: [City] -> [Int] -> [City]
+updatePopulations :: [City] -> [Population] -> [City]
 updatePopulations cs pops = changed ++ unchanged
   where
     changed = zipWith addYearToRecord cs pops
     unchanged = drop (length changed) cs
 
-addYearToRecord :: City -> Int -> City
+addYearToRecord :: City -> Population -> City
 addYearToRecord c yr = City (name c) (north c) (east c) (yr : populations c)
 
 -------------------------------------------------
@@ -153,34 +160,34 @@ insertSorted x xs@(next : rest)
 --                  section six               --
 ------------------------------------------------
 
-fmtGrowthFigures :: [City] -> String -> String
-fmtGrowthFigures c cs = unlines [show g | g <- getGrowth c cs]
+fmtGrowthFigures :: [City] -> Name -> String
+fmtGrowthFigures cs nm = unlines [show g | g <- getGrowth cs nm]
 
-getGrowth :: [City] -> String -> [Float]
-getGrowth nm = maybe [] (calcFigures . populations) . cityFromName nm
+getGrowth :: [City] -> Name -> [Growth]
+getGrowth cs nm = maybe [] (calcGrowth . populations) $ cityFromName cs nm
 
-calcFigures :: [Int] -> [Float]
-calcFigures [cur, pvs]       = [toFloat (cur - pvs) / toFloat pvs * 100]
-calcFigures (cur : pvs : ys) = calcFigures [cur, pvs] ++ calcFigures (pvs : ys)
+calcGrowth :: [Population] -> [Growth]
+calcGrowth [cur, pvs]       = [toFloat (cur - pvs) / toFloat pvs * 100]
+calcGrowth (cur : pvs : ys) = calcGrowth [cur, pvs] ++ calcGrowth (pvs : ys)
 
 --------------------------------------------------
 --                  section seven               --
 --------------------------------------------------
 
-nearestCityName :: [City] -> Location -> Int -> String
+nearestCityName :: [City] -> Location -> Population -> Name
 nearestCityName cs loc pop = maybe "no data" name (nearestCity cs loc pop)
 
-nearestCity :: [City] -> Location -> Int -> Maybe City
+nearestCity :: [City] -> Location -> Population -> Maybe City
 nearestCity cs target pop = idx >>= \i -> Just (cs !! i)
   where
     candidates = [c | c <- cs, head (populations c) > pop]
     dists = target `distancesFrom` locations cs
     idx = elemIndex (minimum dists) dists
 
-distancesFrom :: Location -> [Location] -> [Float]
+distancesFrom :: Location -> [Location] -> [Distance]
 distancesFrom = map . distance
 
-distance :: Location -> Location -> Float
+distance :: Location -> Location -> Distance
 distance (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
 
 ------------------------------------------------------
@@ -231,7 +238,7 @@ drawCities cs = clearScreen >> mapM_ drawCity cs >> goTo (0, 40)
 drawCity :: City -> IO ()
 drawCity c = drawCityPlot (location c) (name c) $ Just c `populationYearsAgo` 0
 
-drawCityPlot :: Location -> String -> String -> IO ()
+drawCityPlot :: Location -> Name -> StringPopulation -> IO ()
 drawCityPlot (n, e) nm pop = writeAt p1 ("+ " ++ nm) >> writeAt p2 pop
   where
     -- get abs after subtracting 54 (largest nm value in testData) to flip y
@@ -301,7 +308,7 @@ loopChoices cs = do
     then return (unlines $ map show cs)
     else loopChoices cs
 
-doCityNameIO :: IO String
+doCityNameIO :: IO Name
 doCityNameIO = putStr "Please enter city name:\n> " >> getLine
 
 doGetInt :: IO (Maybe Int)
