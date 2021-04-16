@@ -266,13 +266,14 @@ locationToPosition (n, e) = (e * 2, abs (n - 54) * 2)
 main :: IO ()
 main = do
   tmp <- fileToCities "cities.txt"
+  let cs = catMaybes tmp
   -- we filter out any invalid cities given to us in the file
   -- and notify the user how many have been filtered out
-  let cs = catMaybes tmp
-      diff = length tmp - length cs
-  if diff /= 0
-    then printf "\nWARNING: Ignored %i rows of invalid data in file.\n" diff
-    else return ()
+  loaded <- case length tmp - length cs of
+    0 -> return $ green $ printf "%i/%i" (length cs) (length tmp)
+    _ -> return $ red $ printf "%i/%i" (length cs) (length tmp)
+  printf "\nINFO: Loaded %s cities.\n" loaded
+
   putStrLn $ '\n' : getPrettyNamesString cs
   updatedCities <- loopChoices cs
   writeFile "cities.txt" updatedCities
@@ -300,10 +301,17 @@ promptUser = do
   putStr "\ESC[0m\n"
   return input
 
-underline :: String -> String
-underline s = "\ESC[1;4m" ++ s ++ "\ESC[0m"
+endFmt :: String
+endFmt = "\ESC[0m"
 
-red s = "\ESC[31m" ++ s ++ "\ESC[0m"
+underline :: String -> String
+underline = ("\ESC[1;4m" ++) . (++ endFmt)
+
+red :: String -> String
+red = ("\ESC[31m" ++) . (++ endFmt)
+
+green :: String -> String
+green = ("\ESC[32m" ++) . (++ endFmt)
 
 matchChoice :: [City] -> String -> IO ()
 matchChoice cs choice
@@ -341,20 +349,19 @@ loopChoices cs = do
 -- for user interface, output a nicer formatted list
 -- unlines changes e.x. ["London", "Paris"] to "London\nParis\n"
 getPrettyNamesString :: [City] -> String
-getPrettyNamesString = (underline "Cities:\n\n" ++) .
+getPrettyNamesString = (underline "City Names:\n\n" ++) .
   unlines . map (("• " ++) . name)
 
 getCityNameIO :: IO Name
 getCityNameIO = putStr "Please enter city name:" >> promptUser
 
-getIntIO :: IO (Maybe Int)
-getIntIO = readMaybe <$> promptUser
+getIntIO :: String -> IO (Maybe Int)
+getIntIO str = putStr str >> readMaybe <$> promptUser
 
 getListOfIntsIO :: IO [Int]
 getListOfIntsIO = do
   -- any non integer input terminates the recursion
-  putStr "Please enter an integer (non-integer to finish)"
-  input <- getIntIO
+  input <- getIntIO "Please enter an integer (non-integer to finish)"
   case input of
     -- lambda needed due to the IO monad
     (Just x) -> getListOfIntsIO >>= \xs -> return (x : xs)
@@ -362,12 +369,9 @@ getListOfIntsIO = do
 
 doFindCityIO :: [City] -> IO ()
 doFindCityIO cs = do
-  putStr "Please enter city's location (degrees north):"
-  nrth <- getIntIO
-  putStr "Please enter city's location (degrees east):"
-  est <- getIntIO
-  putStr "Please enter minimum population city should have:"
-  minPopulation <- getIntIO
+  nrth <- getIntIO "Please enter city's location (degrees north):"
+  est <- getIntIO "Please enter city's location (degrees east):"
+  minPopulation <- getIntIO "Please enter minimum population city should have:"
   case (nrth, est, minPopulation) of
     (Just n, Just e, Just pop) ->
       printf "Nearest City: %s\n\n" (nearestCityName cs (n, e) pop)
@@ -376,8 +380,7 @@ doFindCityIO cs = do
 doPopulationIO :: [City] -> IO ()
 doPopulationIO cs = do
   city <- getCityNameIO
-  putStr "Please enter how many years ago to get records (0 for current):"
-  idx <- getIntIO
+  idx <- getIntIO "Please enter how many years ago to get records (0 for current):"
   case idx of
     (Just i) -> printf "Population: %s\n\n" (getPopulation cs city i)
     Nothing -> putStrLn $ red "Invalid input.\n"
@@ -393,10 +396,8 @@ doAnnualGrowthIO cs = do
 dosortedInsertIO :: [City] -> IO [City]
 dosortedInsertIO cs = do
   nm <- getCityNameIO
-  putStr "Please enter degrees north:\n> "
-  nrth <- getIntIO
-  putStr "Please enter degrees east:\n> "
-  est <- getIntIO
+  nrth <- getIntIO "Please enter degrees north:"
+  est <- getIntIO "Please enter degrees east:"
   putStrLn "Please enter population figures (from most recent, 2+ entries)"
   pops <- getListOfIntsIO
   case (nrth, est) of
