@@ -89,7 +89,7 @@ getNames = map name
 ------------------------------------------------
 
 getPopulation :: [City] -> Name -> Index -> StringPopulation
-getPopulation = (populationIndex .) . cityFromName
+getPopulation cs nm = populationIndex (cityFromName cs nm)
 
 populationIndex :: Maybe City -> Index -> StringPopulation
 Nothing `populationIndex` _ = "no data"
@@ -202,7 +202,7 @@ demo 2 = putStrLn $ getPopulation testData "Madrid" 2
 demo 3 = putStr $ citiesToString testData
 demo 4 = putStr . citiesToString $ updatePopulations testData
   [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
-demo 5 = putStr . citiesToString $ 
+demo 5 = putStr . citiesToString $
   testData `sortedInsert` City "Prague" 50 14 [1312, 1306, 1299, 1292]
 demo 6 = putStr $ fmtGrowthFigures testData "London"
 demo 7 = putStrLn $ nearestCityName testData (54, 6) 2000
@@ -282,7 +282,8 @@ fileToCities :: FilePath -> IO [Maybe City]
 fileToCities = fmap (map readMaybe . lines) . readFile
 
 showOptions :: IO ()
-showOptions = putStr $ underline "Options:" ++ "\n\n\
+showOptions = putStr $ underline "Options:" ++
+  "\n\n\
   \(1) Show names \n\
   \(2) Return population of city n years ago \n\
   \(3) Display cities data \n\
@@ -293,16 +294,13 @@ showOptions = putStr $ underline "Options:" ++ "\n\n\
   \(8) Draw city map \n\
   \(9) Exit"
 
- -- TODO: need to ask if this is okay
+-- TODO: need to ask if this is okay
 promptUser :: IO String
 promptUser = do
-  putStr "\n\n\ESC[2m>>> "
+  putStr "\n\n\ESC[1;2m>>>\ESC[0;2m "
   input <- getLine
-  putStr "\ESC[0m\n"
+  putStrLn endFmt 
   return input
-
-endFmt :: String
-endFmt = "\ESC[0m"
 
 underline :: String -> String
 underline = ("\ESC[1;4m" ++) . (++ endFmt)
@@ -312,6 +310,9 @@ red = ("\ESC[31m" ++) . (++ endFmt)
 
 green :: String -> String
 green = ("\ESC[32m" ++) . (++ endFmt)
+
+endFmt :: String
+endFmt = "\ESC[0m"
 
 matchChoice :: [City] -> String -> IO ()
 matchChoice cs choice
@@ -349,8 +350,10 @@ loopChoices cs = do
 -- for user interface, output a nicer formatted list
 -- unlines changes e.x. ["London", "Paris"] to "London\nParis\n"
 getPrettyNamesString :: [City] -> String
-getPrettyNamesString = (underline "City Names:\n\n" ++) .
-  unlines . map (("• " ++) . name)
+getPrettyNamesString =
+  (underline "City Names:\n\n" ++)
+    . unlines
+    . map (("• " ++) . name)
 
 getCityNameIO :: IO Name
 getCityNameIO = putStr "Please enter city name:" >> promptUser
@@ -383,7 +386,7 @@ doPopulationIO cs = do
   idx <- getIntIO "Please enter how many years ago to get records (0 for current):"
   case idx of
     (Just i) -> printf "Population: %s\n\n" (getPopulation cs city i)
-    Nothing -> putStrLn $ red "Invalid input.\n"
+    Nothing -> putStrLn $ red "Please enter a valid integer.\n"
 
 doAnnualGrowthIO :: [City] -> IO ()
 doAnnualGrowthIO cs = do
@@ -401,5 +404,9 @@ dosortedInsertIO cs = do
   putStrLn "Please enter population figures (from most recent, 2+ entries)"
   pops <- getListOfIntsIO
   case (nrth, est) of
-    (Just n, Just e) -> return $ cs `sortedInsert` City nm n e pops
-    _ -> putStrLn (red "Invalid data given, not adding city\n") >> return cs
+    (Just n, Just e)
+      | length pops >= 2 -> return $ cs `sortedInsert` City nm n e pops
+      | otherwise -> do
+          putStrLn $ red "Not enough population figures, not adding city.\n"
+          return cs
+    _ -> putStrLn (red "Invalid data given, not adding city.\n") >> return cs
