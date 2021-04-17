@@ -7,6 +7,8 @@ import Text.Printf (printf)
 -- for parsing user input into Maybe a
 import Text.Read (readMaybe)
 
+import Control.Monad (liftM2)
+
 ------------------------------------------------
 --                   types                    --
 ------------------------------------------------
@@ -59,7 +61,7 @@ toFloat :: Integral a => a -> Float
 toFloat = fromIntegral
 
 location :: City -> Location
-location c = (north c, east c)
+location = liftM2 (,) north east
 
 locations :: [City] -> [Location]
 locations = map location
@@ -75,7 +77,7 @@ cs `maybeElemAt` (Just i)
   | otherwise = Nothing
 
 cityFromName :: [City] -> Name -> Maybe City
-cityFromName cs = maybeElemAt cs . nameIndex cs
+cityFromName = liftM2 (.) maybeElemAt nameIndex
 
 ------------------------------------------------
 --                  section one               --
@@ -89,7 +91,7 @@ getNames = map name
 ------------------------------------------------
 
 getPopulation :: [City] -> Name -> Index -> StringPopulation
-getPopulation cs nm = populationIndex (cityFromName cs nm)
+getPopulation cs = populationIndex . cityFromName cs
 
 populationIndex :: Maybe City -> Index -> StringPopulation
 Nothing `populationIndex` _ = "no data"
@@ -148,29 +150,23 @@ addYearToRecord c p = City (name c) (north c) (east c) (p : populations c)
 --                  section five               --
 -------------------------------------------------
 
-sortedInsert :: (Ord a) => [a] -> a -> [a]
-[] `sortedInsert` x = [x]
-xs@(next : rest) `sortedInsert` x
-  | x > next = next : rest `sortedInsert` x
-  | otherwise = x : xs
+insertCity :: [City] -> City -> [City]
+cs `insertCity` c = below ++ (c : above)
+  where (below, above) = span (< c) cs
 
 ------------------------------------------------
 --                  section six               --
 ------------------------------------------------
 
 fmtGrowthFigures :: [City] -> Name -> String
-fmtGrowthFigures cs nm = unlines [show g | g <- getGrowth cs nm]
+fmtGrowthFigures cs = unlines . map show . getGrowth cs
 
 getGrowth :: [City] -> Name -> [Growth]
 getGrowth cs nm = maybe [] growthList city
   where
-    growthList = calcGrowth . populations
+    growthList = fmap calcGrowth . (zip <*> tail) . map toFloat . populations
+    calcGrowth (cur, prev) = (cur - prev) / prev * 100
     city = cityFromName cs nm
-
-calcGrowth :: [Population] -> [Growth]
-calcGrowth [cur, pvs] = [toFloat (cur - pvs) / toFloat pvs * 100]
-calcGrowth (cur : pvs : ys) = calcGrowth [cur, pvs] ++ calcGrowth (pvs : ys)
-calcGrowth _ = [0]
 
 --------------------------------------------------
 --                  section seven               --
@@ -203,7 +199,7 @@ demo 3 = putStr $ citiesToString testData
 demo 4 = putStr . citiesToString $ updatePopulations testData
   [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
 demo 5 = putStr . citiesToString $
-  testData `sortedInsert` City "Prague" 50 14 [1312, 1306, 1299, 1292]
+  testData `insertCity` City "Prague" 50 14 [1312, 1306, 1299, 1292]
 demo 6 = putStr $ fmtGrowthFigures testData "London"
 demo 7 = putStrLn $ nearestCityName testData (54, 6) 2000
 demo 8 = drawCities testData
@@ -273,7 +269,6 @@ main = do
     0 -> return $ green $ printf "%i/%i" (length cs) (length tmp)
     _ -> return $ red $ printf "%i/%i" (length cs) (length tmp)
   printf "\nINFO: Loaded %s cities.\n" loaded
-
   putStrLn $ '\n' : getPrettyNamesString cs
   updatedCities <- loopChoices cs
   writeFile "cities.txt" updatedCities
@@ -299,7 +294,7 @@ promptUser :: IO String
 promptUser = do
   putStr "\n\n\ESC[1;2m>>>\ESC[0;2m "
   input <- getLine
-  putStrLn endFmt 
+  putStrLn endFmt
   return input
 
 underline :: String -> String
@@ -314,6 +309,28 @@ green = ("\ESC[32m" ++) . (++ endFmt)
 endFmt :: String
 endFmt = "\ESC[0m"
 
+loopChoices :: [City] -> IO String
+loopChoices cs = do
+  showOptions
+  choice <- promptUser
+  -- split into two cases to reduce complexity of options
+  -- that don't alter city data
+  updatedCities <- case choice of
+    "4" -> do
+      new <- fmap (updatePopulations cs) getListOfIntsIO
+      putStrLn $ citiesToString new
+      return new
+    "5" -> do
+      new <- doinsertCityIO cs
+      putStrLn $ citiesToString new
+      return new
+    _ -> matchChoice cs choice >> return cs
+
+  if choice == "9"
+    then -- convert cities from [City] to newline-separated String
+      return (unlines $ map show updatedCities)
+    else loopChoices updatedCities
+
 matchChoice :: [City] -> String -> IO ()
 matchChoice cs choice
   | choice == "1" = putStrLn $ getPrettyNamesString cs
@@ -322,30 +339,8 @@ matchChoice cs choice
   | choice == "6" = doAnnualGrowthIO cs
   | choice == "7" = doFindCityIO cs
   | choice == "8" = drawCities cs
-  | choice `elem` ["4", "5", "9"] = return () -- handle these options below
+  | choice `elem` ["4", "5", "9"] = return ()
   | otherwise = putStrLn $ red "Invalid choice.\n"
-
-loopChoices :: [City] -> IO String
-loopChoices cs = do
-  showOptions
-  choice <- promptUser
-  matchChoice cs choice
-  -- separate case to reduce complexity of above
-  updatedCities <- case choice of
-    "4" -> do
-      new <- fmap (updatePopulations cs) getListOfIntsIO
-      putStrLn $ citiesToString new
-      return new
-    "5" -> do
-      new <- dosortedInsertIO cs
-      putStrLn $ citiesToString new
-      return new
-    _ -> return cs
-
-  if choice == "9"
-    then -- convert cities from [City] to newline-separated String
-      return (unlines $ map show updatedCities)
-    else loopChoices updatedCities
 
 -- for user interface, output a nicer formatted list
 -- unlines changes e.x. ["London", "Paris"] to "London\nParis\n"
@@ -363,11 +358,9 @@ getIntIO str = putStr str >> readMaybe <$> promptUser
 
 getListOfIntsIO :: IO [Int]
 getListOfIntsIO = do
-  -- any non integer input terminates the recursion
   input <- getIntIO "Please enter an integer (non-integer to finish)"
   case input of
-    -- lambda needed due to the IO monad
-    (Just x) -> getListOfIntsIO >>= \xs -> return (x : xs)
+    (Just x) -> fmap (x :) getListOfIntsIO
     Nothing -> return []
 
 doFindCityIO :: [City] -> IO ()
@@ -396,8 +389,8 @@ doAnnualGrowthIO cs = do
     then putStrLn "No data available.\n"
     else putStrLn $ underline "Annual Growth Figures:\n\n" ++ growth
 
-dosortedInsertIO :: [City] -> IO [City]
-dosortedInsertIO cs = do
+doinsertCityIO :: [City] -> IO [City]
+doinsertCityIO cs = do
   nm <- getCityNameIO
   nrth <- getIntIO "Please enter degrees north:"
   est <- getIntIO "Please enter degrees east:"
@@ -405,7 +398,7 @@ dosortedInsertIO cs = do
   pops <- getListOfIntsIO
   case (nrth, est) of
     (Just n, Just e)
-      | length pops >= 2 -> return $ cs `sortedInsert` City nm n e pops
+      | length pops >= 2 -> return $ cs `insertCity` City nm n e pops
       | otherwise -> do
           putStrLn $ red "Not enough population figures, not adding city.\n"
           return cs
