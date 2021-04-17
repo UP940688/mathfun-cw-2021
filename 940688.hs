@@ -66,18 +66,8 @@ location = liftM2 (,) north east
 locations :: [City] -> [Location]
 locations = map location
 
-nameIndex :: [City] -> Name -> Maybe Index
-nameIndex = flip elemIndex . map name
-
-maybeElemAt :: [a] -> Maybe Index -> Maybe a
-_ `maybeElemAt` Nothing = Nothing
-cs `maybeElemAt` (Just i)
-  | i >= 0 && i < length cs = Just $ cs !! i
-  | otherwise = Nothing
-
--- call maybeElemAt with [City] and the result of nameIndex
 cityFromName :: [City] -> Name -> Maybe City
-cityFromName = liftM2 (.) maybeElemAt nameIndex
+cityFromName cs nm = Just . (cs !!) =<< elemIndex nm (map name cs)
 
 ------------------------------------------------
 --                  section one               --
@@ -91,7 +81,7 @@ getNames = map name
 ------------------------------------------------
 
 getPopulation :: [City] -> Name -> Index -> StringPopulation
-getPopulation cs = populationIndex . cityFromName cs
+getPopulation = fmap populationIndex . cityFromName
 
 populationIndex :: Maybe City -> Index -> StringPopulation
 Nothing `populationIndex` _ = "no data"
@@ -120,8 +110,8 @@ wrap :: String -> String -> String -> String
 wrap headr footr mid = headr ++ mid ++ footr
 
 header :: String
-header = wrap columnLine ('\n' : columnLine)
-  "|     Name     |  Deg. North  |   Deg. East  |  Population  |   Previous   |"
+header = wrap columnLine columnLine
+  "|     Name     |  Deg. North  |   Deg. East  |  Population  |   Previous   |\n"
 
 columnLine :: String
 columnLine = wrap "+" "+\n" $ intercalate "+" (replicate 5 "--------------")
@@ -133,8 +123,11 @@ columnLine = wrap "+" "+\n" $ intercalate "+" (replicate 5 "--------------")
 updatePopulations :: [City] -> [Population] -> [City]
 updatePopulations cs pops = changed ++ unchanged
   where
-    changed = zipWith addYearToRecord cs pops
+    changed = addYearsToRecords cs pops
     unchanged = drop (length changed) cs
+
+addYearsToRecords :: [City] -> [Population] -> [City]
+addYearsToRecords = zipWith addYearToRecord
 
 addYearToRecord :: City -> Population -> City
 addYearToRecord c p = City (name c) (north c) (east c) (p : populations c)
@@ -152,30 +145,30 @@ cs `insertCity` c = below ++ (c : above)
 ------------------------------------------------
 
 fmtGrowthFigures :: [City] -> Name -> String
-fmtGrowthFigures cs = unlines . map show . getGrowth cs
+fmtGrowthFigures = fmap (unlines . map show) . getGrowth
 
-getGrowth :: [City] -> Name -> [Growth]
-getGrowth cs nm = maybe [] yearlyGrowths (cityFromName cs nm)
+getGrowth :: [City] -> Name -> [Float]
+getGrowth = fmap (maybe [] yearlyGrowths) . cityFromName
 
 yearlyGrowths :: City -> [Float]
-yearlyGrowths = fmap growth . toPairs . populations
+yearlyGrowths = fmap growth . toPairs . (map toFloat . populations)
   where
     toPairs = zip <*> tail -- zips a list with tail of itself
-    growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
+    growth (p1, p2) = (p1 - p2) / p1 * 100
 
 --------------------------------------------------
 --                  section seven               --
 --------------------------------------------------
 
 nearestCityName :: [City] -> Location -> Population -> Name
-nearestCityName cs loc pop = maybe "no data" name (nearestCity cs loc pop)
-
+nearestCityName cs = fmap (maybe "no data" name) . nearestCity cs
+ 
 -- get city with the lowest distance score to point (match up indexes)
 nearestCity :: [City] -> Location -> Population -> Maybe City
 nearestCity cs target pop = Just (cs !!) <*> elemIndex (minimum dists) dists
   where
-    candidates = [c | c <- cs, head (populations c) > pop]
-    dists = map (distance target) $ locations candidates
+    candidates = filter ((pop <) . head . populations)
+    dists = map (distance target) . locations $ candidates cs
 
 distance :: Location -> Location -> Distance
 distance (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
@@ -185,15 +178,15 @@ distance (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
 ------------------------------------------------------
 
 demo :: Int -> IO ()
-demo 1 = print $ getNames testData
-demo 2 = putStrLn $ getPopulation testData "Madrid" 2
-demo 3 = putStr $ citiesToString testData
+demo 1 = print (getNames testData)
+demo 2 = putStrLn (getPopulation testData "Madrid" 2)
+demo 3 = putStr (citiesToString testData)
 demo 4 = putStr . citiesToString $ updatePopulations testData
   [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
 demo 5 = putStr . citiesToString $
   testData `insertCity` City "Prague" 50 14 [1312, 1306, 1299, 1292]
-demo 6 = putStr $ fmtGrowthFigures testData "London"
-demo 7 = putStrLn $ nearestCityName testData (54, 6) 2000
+demo 6 = putStr (fmtGrowthFigures testData "London")
+demo 7 = putStrLn (nearestCityName testData (54, 6) 2000)
 demo 8 = drawCities testData
 demo _ = putStrLn "Please pick a number 1-8."
 
