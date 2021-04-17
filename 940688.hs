@@ -6,7 +6,7 @@ import Data.Maybe (catMaybes)
 import Text.Printf (printf)
 -- for parsing user input into Maybe a
 import Text.Read (readMaybe)
-
+-- for applying a value to two functions, then applying a function to those
 import Control.Monad (liftM2)
 
 ------------------------------------------------
@@ -37,7 +37,7 @@ data City = City
   }
   deriving (Eq, Ord, Show, Read)
 
--- below types defined for easier reading of type signatures
+-- below are defined for easier reading of type signatures
 
 type Location = (Int, Int)
 
@@ -69,13 +69,13 @@ locations = map location
 nameIndex :: [City] -> Name -> Maybe Index
 nameIndex = flip elemIndex . map name
 
--- (Just a) if the index is valid, Nothing otherwise
 maybeElemAt :: [a] -> Maybe Index -> Maybe a
 _ `maybeElemAt` Nothing = Nothing
 cs `maybeElemAt` (Just i)
   | i >= 0 && i < length cs = Just $ cs !! i
   | otherwise = Nothing
 
+-- call maybeElemAt with [City] and the result of nameIndex
 cityFromName :: [City] -> Name -> Maybe City
 cityFromName = liftM2 (.) maybeElemAt nameIndex
 
@@ -98,8 +98,7 @@ Nothing `populationIndex` _ = "no data"
 (Just c) `populationIndex` i
   | i >= 0 && i < len = fmtPopulation (populations c !! i)
   | otherwise = "no data"
-  where
-    len = (length . populations) c
+  where len = (length . populations) c
 
 -- divide by 1000 to convert from x 1000s to x millions
 fmtPopulation :: Population -> StringPopulation
@@ -115,15 +114,9 @@ citiesToString = wrap header columnLine . concatMap getCityData
 getCityData :: City -> String
 getCityData c = printf "| %-12s | %12d | %12d | %12s | %12s |\n"
   (name c) (north c) (east c) cur pvs
-  where
-    (cur, pvs) = getPopulationPair $ populations c
+  where [cur, pvs] = take 2 . map fmtPopulation $ populations c
 
-getPopulationPair :: [Population] -> (StringPopulation, StringPopulation)
-getPopulationPair (cur : pvs : _) = (fmtPopulation cur, fmtPopulation pvs)
-getPopulationPair [cur] = (fmtPopulation cur, "no data")
-getPopulationPair _ = ("no data", "no data")
-
-wrap :: [a] -> [a] -> [a] -> [a]
+wrap :: String -> String -> String -> String
 wrap headr footr mid = headr ++ mid ++ footr
 
 header :: String
@@ -162,11 +155,13 @@ fmtGrowthFigures :: [City] -> Name -> String
 fmtGrowthFigures cs = unlines . map show . getGrowth cs
 
 getGrowth :: [City] -> Name -> [Growth]
-getGrowth cs nm = maybe [] growthList city
+getGrowth cs nm = maybe [] yearlyGrowths (cityFromName cs nm)
+
+yearlyGrowths :: City -> [Float]
+yearlyGrowths = fmap growth . toPairs . populations
   where
-    growthList = fmap calcGrowth . (zip <*> tail) . map toFloat . populations
-    calcGrowth (cur, prev) = (cur - prev) / prev * 100
-    city = cityFromName cs nm
+    toPairs = zip <*> tail -- zips a list with tail of itself
+    growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
 
 --------------------------------------------------
 --                  section seven               --
@@ -175,15 +170,12 @@ getGrowth cs nm = maybe [] growthList city
 nearestCityName :: [City] -> Location -> Population -> Name
 nearestCityName cs loc pop = maybe "no data" name (nearestCity cs loc pop)
 
+-- get city with the lowest distance score to point (match up indexes)
 nearestCity :: [City] -> Location -> Population -> Maybe City
-nearestCity cs target pop = idx >>= \i -> Just (cs !! i)
+nearestCity cs target pop = Just (cs !!) <*> elemIndex (minimum dists) dists
   where
     candidates = [c | c <- cs, head (populations c) > pop]
-    dists = target `distancesFrom` locations candidates
-    idx = elemIndex (minimum dists) dists
-
-distancesFrom :: Location -> [Location] -> [Distance]
-distancesFrom = map . distance
+    dists = map (distance target) $ locations candidates
 
 distance :: Location -> Location -> Distance
 distance (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
@@ -219,8 +211,6 @@ clearScreen = putStr "\ESC[2J"
 goTo :: ScreenPosition -> IO ()
 goTo (x, y) = putStr ("\ESC[" ++ show y ++ ";" ++ show x ++ "H")
 
--- TODO: ask if we can use ansi colours in escape
-
 -- Writes a string at a position on the screen
 writeAt :: ScreenPosition -> String -> IO ()
 writeAt position text = do
@@ -232,7 +222,7 @@ writeAt position text = do
 ------------------------------------------------------
 
 -- IO is a monad, so use mapM to apply drawCity to each city
--- pass the mapped co-ords to adjustCursor
+-- then pass the mapped co-ords to adjustCursor
 drawCities :: [City] -> IO ()
 drawCities cs = clearScreen >> mapM drawCity cs >>= adjustCursor
 
@@ -273,6 +263,7 @@ main = do
   updatedCities <- loopChoices cs
   writeFile "cities.txt" updatedCities
 
+-- fmap to map IO String, then map each line to a Maybe City
 fileToCities :: FilePath -> IO [Maybe City]
 fileToCities = fmap (map readMaybe . lines) . readFile
 
@@ -289,7 +280,6 @@ showOptions = putStr $ underline "Options:" ++
   \(8) Draw city map \n\
   \(9) Exit"
 
--- TODO: need to ask if this is okay
 promptUser :: IO String
 promptUser = do
   putStr "\n\n\ESC[1;2m>>>\ESC[0;2m "
@@ -313,8 +303,8 @@ loopChoices :: [City] -> IO String
 loopChoices cs = do
   showOptions
   choice <- promptUser
-  -- split into two cases to reduce complexity of options
-  -- that don't alter city data
+  -- split into two cases to reduce complexity of handling
+  -- options that don't alter city data
   updatedCities <- case choice of
     "4" -> do
       new <- fmap (updatePopulations cs) getListOfIntsIO
@@ -327,8 +317,7 @@ loopChoices cs = do
     _ -> matchChoice cs choice >> return cs
 
   if choice == "9"
-    then -- convert cities from [City] to newline-separated String
-      return (unlines $ map show updatedCities)
+    then return (unlines $ map show updatedCities)
     else loopChoices updatedCities
 
 matchChoice :: [City] -> String -> IO ()
@@ -342,8 +331,6 @@ matchChoice cs choice
   | choice `elem` ["4", "5", "9"] = return ()
   | otherwise = putStrLn $ red "Invalid choice.\n"
 
--- for user interface, output a nicer formatted list
--- unlines changes e.x. ["London", "Paris"] to "London\nParis\n"
 getPrettyNamesString :: [City] -> String
 getPrettyNamesString =
   (underline "City Names:\n\n" ++)
@@ -359,9 +346,9 @@ getIntIO str = putStr str >> readMaybe <$> promptUser
 getListOfIntsIO :: IO [Int]
 getListOfIntsIO = do
   input <- getIntIO "Please enter an integer (non-integer to finish)"
-  case input of
-    (Just x) -> fmap (x :) getListOfIntsIO
-    Nothing -> return []
+  maybe (return []) getList input
+  where
+    getList x = fmap (x :) getListOfIntsIO
 
 doFindCityIO :: [City] -> IO ()
 doFindCityIO cs = do
