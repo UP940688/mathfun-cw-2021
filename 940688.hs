@@ -1,3 +1,5 @@
+-- for applying a value to two functions, then applying a function to those
+import Control.Monad (liftM2)
 -- for finding index of element and table formatting
 import Data.List (elemIndex, intercalate)
 -- for filtering Nothings out of [Maybe a]
@@ -6,8 +8,6 @@ import Data.Maybe (catMaybes)
 import Text.Printf (printf)
 -- for parsing user input into Maybe a
 import Text.Read (readMaybe)
--- for applying a value to two functions, then applying a function to those
-import Control.Monad (liftM2)
 
 ------------------------------------------------
 --                   types                    --
@@ -88,9 +88,9 @@ Nothing `populationIndex` _ = "no data"
 (Just c) `populationIndex` i
   | i >= 0 && i < len = fmtPopulation (populations c !! i)
   | otherwise = "no data"
-  where len = (length . populations) c
+  where
+    len = (length . populations) c
 
--- divide by 1000 to convert from x 1000s to x millions
 fmtPopulation :: Population -> StringPopulation
 fmtPopulation = printf "%.3fm" . (/ 1000) . toFloat
 
@@ -104,7 +104,8 @@ citiesToString = wrap header columnLine . concatMap getCityData
 getCityData :: City -> String
 getCityData c = printf "| %-12s | %12d | %12d | %12s | %12s |\n"
   (name c) (north c) (east c) cur pvs
-  where [cur, pvs] = take 2 . map fmtPopulation $ populations c
+  where
+    [cur, pvs] = take 2 . map fmtPopulation $ populations c
 
 wrap :: String -> String -> String -> String
 wrap headr footr mid = headr ++ mid ++ footr
@@ -138,7 +139,8 @@ addYearToRecord c p = City (name c) (north c) (east c) (p : populations c)
 
 insertCity :: [City] -> City -> [City]
 cs `insertCity` c = below ++ (c : above)
-  where (below, above) = span (< c) cs
+  where
+    (below, above) = span (< c) cs
 
 ------------------------------------------------
 --                  section six               --
@@ -162,7 +164,7 @@ yearlyGrowths = fmap growth . toPairs . (map toFloat . populations)
 
 nearestCityName :: [City] -> Location -> Population -> Name
 nearestCityName cs = fmap (maybe "no data" name) . nearestCity cs
- 
+
 -- get city with the lowest distance score to point (match up indexes)
 nearestCity :: [City] -> Location -> Population -> Maybe City
 nearestCity cs target pop = Just (cs !!) <*> elemIndex (minimum dists) dists
