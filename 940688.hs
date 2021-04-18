@@ -1,5 +1,3 @@
--- for applying a value to 2 functions, then applying those to another function
-import Control.Monad (liftM2)
 -- for finding index of element and table formatting
 import Data.List (elemIndex, intercalate)
 -- for filtering Nothings out of [Maybe a]
@@ -30,10 +28,10 @@ testData =
   ]
 
 data City = City
-  { name :: Name,
-    north :: Int,
-    east :: Int,
-    records :: [Population]
+  { getName :: Name,
+    getNorth :: Int,
+    getEast :: Int,
+    getRecords :: [Population]
   }
   deriving (Eq, Ord, Show, Read)
 
@@ -60,12 +58,9 @@ type Name = String
 toFloat :: Integral a => a -> Float
 toFloat = fromIntegral
 
--- applies city to north + east, then joins result into a pair
-location :: City -> Location
-location = liftM2 (,) north east
-
 cityFromName :: [City] -> Name -> Maybe City
-cityFromName cities nm = Just (cities !!) <*> elemIndex nm (getNames cities)
+cityFromName cities name = Just (cities !!) <*> maybeIndex
+  where maybeIndex = elemIndex name (getNames cities)
 
 fmtPopulation :: Population -> FormattedPopulation
 fmtPopulation = printf "%.3fm" . (/ 1000) . toFloat
@@ -75,7 +70,7 @@ fmtPopulation = printf "%.3fm" . (/ 1000) . toFloat
 ------------------------------------------------
 
 getNames :: [City] -> [Name]
-getNames = map name
+getNames = map getName
 
 ------------------------------------------------
 --                  section two               --
@@ -85,11 +80,11 @@ getPopulation :: [City] -> Name -> Index -> FormattedPopulation
 getPopulation = fmap populationAt . cityFromName
 
 maybeRecord :: City -> Index -> Maybe Population
-maybeRecord city i
-  | i >= 0 && i < (length . records) city = Just (records city !! i)
+maybeRecord (City _ _ _ records) i
+  | i >= 0 && i < length records = Just (records !! i)
   | otherwise = Nothing
 
-populationAt :: Maybe City -> Int -> FormattedPopulation
+populationAt :: Maybe City -> Index -> FormattedPopulation
 (Just city) `populationAt` i = maybe "no data" fmtPopulation (maybeRecord city i)
 Nothing `populationAt` _ = "no data"
 
@@ -101,10 +96,9 @@ citiesToString :: [City] -> String
 citiesToString = wrap columnHeader columnLine . concatMap cityRow
 
 cityRow :: City -> String
-cityRow city = printf "| %-12s | %12d | %12d | %12s | %12s |\n"
-  (name city) (north city) (east city) cur pvs
-  where
-    [cur, pvs] = (take 2 . map fmtPopulation . records) city
+cityRow (City name north east records) =
+  printf "| %-12s | %12d | %12d | %12s | %12s |\n" name north east cur pvs
+  where [cur, pvs] = (take 2 . map fmtPopulation) records
 
 wrap :: [a] -> [a] -> [a] -> [a]
 wrap headr footr mid = headr ++ mid ++ footr
@@ -127,7 +121,7 @@ cities `updateRecords` pops = changed ++ unchanged
     unchanged = drop (length changed) cities
 
 addYearToRecord :: City -> Population -> City
-addYearToRecord c pop = City (name c) (north c) (east c) (pop : records c)
+addYearToRecord (City name n e records) pop = City name n e (pop : records)
 
 -------------------------------------------------
 --                  section five               --
@@ -146,7 +140,7 @@ cityGrowth = fmap (maybe [] mapGrowth) . cityFromName
 
 -- (zip <*> tail) == zip xs (tail xs)
 mapGrowth :: City -> [Growth]
-mapGrowth = map growth . (zip <*> tail) . records
+mapGrowth = map growth . (zip <*> tail) . getRecords
 
 growth :: (Population, Population) -> Growth
 growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
@@ -156,14 +150,17 @@ growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
 --------------------------------------------------
 
 nearestCityName :: [City] -> Location -> Population -> Name
-nearestCityName cities = fmap (maybe "no data" name) . nearestCity cities
+nearestCityName cities = fmap (maybe "no data" getName) . nearestCity cities
 
 -- get city with the lowest distance score to point (match up indexes)
 nearestCity :: [City] -> Location -> Population -> Maybe City
 nearestCity cities loc pop = Just (cities !!) <*> minIndex candidates
   where
-    minIndex = (elemIndex =<< minimum) . map (distance loc . location)
-    candidates = filter (\c -> head (records c) > pop) cities
+    minIndex = (elemIndex =<< minimum) . mapDistances loc
+    candidates = filter (\ (City _ _ _ pops) -> head pops > pop) cities
+
+mapDistances :: Location -> [City] -> [Distance]
+mapDistances target = map (\ (City _ n e _) -> distance target (n, e))
 
 distance :: Location -> Location -> Distance
 distance (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
@@ -215,21 +212,19 @@ drawCities :: [City] -> IO ()
 drawCities cities = clearScreen >> mapM drawCity cities >>= adjustCursor
 
 adjustCursor :: [Int] -> IO ()
-adjustCursor positions = goTo (0, maximum positions + 4) -- 4 below lowest y
+adjustCursor ys = goTo (0, maximum ys + 4) -- 4 below lowest mapped city
 
 drawCity :: City -> IO Int
-drawCity city = drawCityPlot (location city) (name city) (head $ records city)
-
-drawCityPlot :: Location -> Name -> Population -> IO Int
-drawCityPlot loc nm pop = do
-  let (x, y) = locationToPosition loc
-  writeAt (x, y) ("+ " ++ nm)
-  writeAt (x, y + 1) (fmtPopulation pop) -- write population underneath name
+drawCity (City name north east records) = do
+  let (x, y) = locationToPosition (north, east)
+  writeAt (x, y) ("+ " ++ name)
+  -- write most recent population record under name
+  writeAt (x, y + 1) $ fmtPopulation (head records)
   return y
 
 -- flip y axis, multiply by 2 to increase distance between cities
 locationToPosition :: Location -> ScreenPosition
-locationToPosition (n, e) = (e * 2, abs (n - 54) * 2)
+locationToPosition (north, east) = (east * 2, abs (north - 54) * 2)
 
 ------------------------------------------------------
 --                  user interface                  --
@@ -319,7 +314,7 @@ getPrettyNamesString :: [City] -> String
 getPrettyNamesString =
   (underline "City Names:\n\n" ++)
     . unlines
-    . map (("• " ++) . name)
+    . map (("• " ++) . getName)
 
 getCityNameIO :: IO Name
 getCityNameIO = putStr "Please enter city name:" >> promptUser
@@ -336,10 +331,10 @@ getListOfIntsIO = do
 
 doFindCityIO :: [City] -> IO ()
 doFindCityIO cities = do
-  dNorth <- getIntIO "Please enter city's location (degrees north):"
-  dEast <- getIntIO "Please enter city's location (degrees east):"
+  north <- getIntIO "Please enter city's location (degrees north):"
+  east <- getIntIO "Please enter city's location (degrees east):"
   pop <- getIntIO "Please enter minimum population city should have:"
-  case (dNorth, dEast, pop) of
+  case (north, east, pop) of
     (Just n, Just e, Just p) ->
       printf "Nearest City: %s\n\n" (nearestCityName cities (n, e) p)
     _ -> putStrLn $ red "Invalid population figure entered."
@@ -354,22 +349,22 @@ doPopulationIO cities = do
 
 doAnnualGrowthIO :: [City] -> IO ()
 doAnnualGrowthIO cities = do
-  nm <- getCityNameIO
-  let growths = unlines $ printf "• %.2f%%" <$> cityGrowth cities nm
+  name <- getCityNameIO
+  let growths = unlines $ printf "• %.2f%%" <$> cityGrowth cities name
   if null growths
     then putStrLn "No data available.\n"
     else putStrLn $ underline "Annual Growth Figures:\n\n" ++ growths
 
 doinsertIO :: [City] -> IO [City]
 doinsertIO cities = do
-  nm <- getCityNameIO
-  dNorth <- getIntIO "Please enter degrees north:"
-  dEast <- getIntIO "Please enter degrees east:"
+  name <- getCityNameIO
+  north <- getIntIO "Please enter degrees north:"
+  east <- getIntIO "Please enter degrees east:"
   putStrLn "Please enter population figures (from most recent, 2+ entries)"
-  pops <- getListOfIntsIO
-  case (dNorth, dEast) of
+  records <- getListOfIntsIO
+  case (north, east) of
     (Just n, Just e)
-      | length pops >= 2 -> return (cities `insert` City nm n e pops)
+      | length records >= 2 -> return (cities `insert` City name n e records)
       | otherwise -> do
         putStrLn $ red "Not enough population figures, not adding city.\n"
         return cities
