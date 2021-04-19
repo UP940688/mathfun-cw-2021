@@ -1,10 +1,10 @@
--- for finding index of element and table formatting
+-- for finding index of elements and table formatting
 import Data.List (elemIndex, intercalate)
--- for filtering Nothings out of [Maybe a]
+-- for filtering [Maybe a] -> [a]
 import Data.Maybe (catMaybes)
--- for pretty printing table output
+-- for pretty printing
 import Text.Printf (printf)
--- for parsing user input into Maybe a
+-- for parsing IO String -> IO (Maybe a)
 import Text.Read (readMaybe)
 
 ------------------------------------------------
@@ -59,8 +59,7 @@ toFloat :: Integral a => a -> Float
 toFloat = fromIntegral
 
 cityFromName :: [City] -> Name -> Maybe City
-cityFromName cities name = Just (cities !!) <*> maybeIndex
-  where maybeIndex = elemIndex name (getNames cities)
+cityFromName cities name = Just (cities !!) <*> elemIndex name (getNames cities)
 
 fmtPopulation :: Population -> FormattedPopulation
 fmtPopulation = printf "%.3fm" . (/ 1000) . toFloat
@@ -85,30 +84,30 @@ maybeRecord (City _ _ _ records) i
   | otherwise = Nothing
 
 populationAt :: Maybe City -> Index -> FormattedPopulation
-(Just city) `populationAt` i = maybe "no data" fmtPopulation (maybeRecord city i)
-Nothing `populationAt` _ = "no data"
+populationAt (Just city) i = maybe "no data" fmtPopulation (maybeRecord city i)
+populationAt Nothing _ = "no data"
 
 --------------------------------------------------
 --                  section three               --
 --------------------------------------------------
 
 citiesToString :: [City] -> String
-citiesToString = wrap columnHeader columnLine . concatMap cityRow
+citiesToString = wrap . concatMap cityRow
 
 cityRow :: City -> String
 cityRow (City name north east records) =
   printf "| %-12s | %12d | %12d | %12s | %12s |\n" name north east cur pvs
-  where [cur, pvs] = (take 2 . map fmtPopulation) records
+  where
+    [cur, pvs] = (take 2 . map fmtPopulation) records
 
-wrap :: [a] -> [a] -> [a] -> [a]
-wrap headr footr mid = headr ++ mid ++ footr
+wrap :: String -> String
+wrap text = (line ++ header ++ line) ++ text ++ line
 
-columnHeader :: String
-columnHeader = wrap columnLine columnLine
-  "|     Name     |  Deg. North  |   Deg. East  |  Population  |   Previous   |\n"
+header :: String
+header = "|     Name     |  Deg. North  |   Deg. East  |  Population  |   Previous   |\n"
 
-columnLine :: String
-columnLine = wrap "+" "+\n" $ intercalate "+" (replicate 5 "--------------")
+line :: String
+line = "+" ++ intercalate "+" (replicate 5 "--------------") ++ "+\n"
 
 -------------------------------------------------
 --                  section four               --
@@ -240,7 +239,7 @@ main = do
     0 -> return $ green $ printf "%i/%i" citiesLen tmpLen
     _ -> return $ red $ printf "%i/%i" citiesLen tmpLen
   printf "\nINFO: Loaded %s cities.\n" loaded
-  putStrLn $ '\n' : getPrettyNamesString cities
+  putStrLn ('\n' : getPrettyNamesString cities)
   updatedCities <- loopChoices cities
   writeFile "cities.txt" updatedCities
 
@@ -311,10 +310,8 @@ matchChoice cities choice
   | otherwise = putStrLn $ red "Invalid choice.\n"
 
 getPrettyNamesString :: [City] -> String
-getPrettyNamesString =
-  (underline "City Names:\n\n" ++)
-    . unlines
-    . map (("• " ++) . getName)
+getPrettyNamesString = (underline "City Names:\n\n" ++) . nameList
+  where nameList = concatMap (\ (City name _ _ _) -> printf "• %s\n" name)
 
 getCityNameIO :: IO Name
 getCityNameIO = putStr "Please enter city name:" >> promptUser
@@ -366,6 +363,6 @@ doinsertIO cities = do
     (Just n, Just e)
       | length records >= 2 -> return (cities `insert` City name n e records)
       | otherwise -> do
-        putStrLn $ red "Not enough population figures, not adding city.\n"
-        return cities
-    _ -> putStrLn (red "Invalid data given, not adding city.\n") >> return cities
+          putStrLn $ red "Not enough population figures, not adding city.\n"
+          return cities
+    _ -> putStrLn (red "Invalid data, not adding city.\n") >> return cities
