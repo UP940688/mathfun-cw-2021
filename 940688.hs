@@ -55,9 +55,11 @@ type Name = String
 --                  helper functions                  --
 --------------------------------------------------------
 
+-- allows us to (toFloat x) rather than (fromIntegral x :: Float)
 toFloat :: Integral a => a -> Float
 toFloat = fromIntegral
 
+-- f (a -> b) <*> f (a) = f (b) (beefed up map / fmap)
 cityFromName :: [City] -> Name -> Maybe City
 cityFromName cities name = Just (cities !!) <*> elemIndex name (getNames cities)
 
@@ -83,6 +85,8 @@ maybeRecord (City _ _ _ records) i
   | i >= 0 && i < length records = Just (records !! i)
   | otherwise = Nothing
 
+-- maybe takes default b, function (a -> b), and (Maybe a)
+-- if Nothing, return default, if (Just a), return result of (a -> b)
 populationAt :: Maybe City -> Index -> FormattedPopulation
 populationAt (Just city) i = maybe "no data" fmtPopulation (maybeRecord city i)
 populationAt Nothing _ = "no data"
@@ -97,6 +101,7 @@ citiesToString = wrap . concatMap cityRow
 cityRow :: City -> String
 cityRow (City name north east records) =
   printf "| %-12s | %12d | %12d | %12s | %12s |\n" name north east cur pvs
+  -- take advantage of haskell's laziness here (it will only map 2 elements)
   where [cur, pvs] = (take 2 . map fmtPopulation) records
 
 wrap :: String -> String
@@ -105,8 +110,9 @@ wrap text = (line ++ header ++ line) ++ text ++ line
 header :: String
 header = "|     Name     |  Deg. North  |   Deg. East  |  Population  |   Previous   |\n"
 
+-- intercalate :: [a] -> [[a]] -> [a] (joins [[a]] with first argument)
 line :: String
-line = printf "+%s+\n" (intercalate "+" $ replicate 5 "--------------")
+line = '+' : intercalate "+" (replicate 5 "--------------") ++ "+\n"
 
 -------------------------------------------------
 --                  section four               --
@@ -133,10 +139,11 @@ xs `insert` x = lower ++ (x : higher)
 --                  section six               --
 ------------------------------------------------
 
+-- <$> = infixr fmap (map for all functors), where (a -> b) <$> f (a) = f (b)
 cityGrowth :: [City] -> Name -> [Growth]
 cityGrowth cities = maybe [] mapGrowth <$> cityFromName cities
 
--- zip <*> tail == zip xs (tail xs)
+-- (zip <*> tail) == zip xs (tail xs), convenient for pointfree notation
 mapGrowth :: City -> [Growth]
 mapGrowth = map growth . (zip <*> tail) . getRecords
 
@@ -150,15 +157,15 @@ growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
 nearestCityName :: [City] -> Location -> Population -> Name
 nearestCityName cities = fmap (maybe "no data" getName) . nearestCity cities
 
--- get city with the lowest distance score to point (match up indexes)
 nearestCity :: [City] -> Location -> Population -> Maybe City
 nearestCity cities loc pop = Just (cities !!) <*> minIndex candidates
   where
-    minIndex = (elemIndex =<< minimum) . mapDistances loc
+    -- y =<< x is equivalent to (x >>= (\a -> y a)) (feeds result of x to y)
+    minIndex = (elemIndex =<< minimum) . distancesTo loc
     candidates = filter (\ (City _ _ _ pops) -> head pops > pop) cities
 
-mapDistances :: Location -> [City] -> [Distance]
-mapDistances target = map (\ (City _ n e _) -> distance target (n, e))
+distancesTo :: Location -> [City] -> [Distance]
+distancesTo target = map (\ (City _ n e _) -> distance (n, e) target)
 
 distance :: Location -> Location -> Distance
 distance (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
@@ -204,8 +211,8 @@ writeAt position text = do
 --                  population map                  --
 ------------------------------------------------------
 
--- IO is a monad, so use mapM to apply drawCity to each city
--- then pass a list of mapped y co-ordinates to adjustCursor
+-- IO is a Monad, so use mapM(onad) to apply drawCity to each city
+-- x >> y roughly means 'do x, then y'
 drawCities :: [City] -> IO ()
 drawCities cities = clearScreen >> mapM drawCity cities >>= adjustCursor
 
@@ -239,7 +246,7 @@ main = do
   updatedCities <- loopChoices cities
   writeFile "cities.txt" updatedCities
 
--- fmap to map over IO monad, map to map over the actual String
+-- fmap to map over IO Monad, then map (readMaybe String :: Maybe City)
 fileToCities :: FilePath -> IO [Maybe City]
 fileToCities fp = map readMaybe . lines <$> readFile fp
 
@@ -336,7 +343,7 @@ doPopulationIO cities = do
   idx <- getIntIO "Please enter how many years ago to get records (0 for current):"
   putStrLn $ maybe (red "Please enter valid integer.") (population city) idx
   where
-    population city = printf "Population: %s\n\n" . getPopulation cities city
+    population name = printf "Population: %s\n\n" . getPopulation cities name
 
 doAnnualGrowthIO :: [City] -> IO ()
 doAnnualGrowthIO cities = do
