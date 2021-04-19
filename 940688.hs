@@ -2,7 +2,7 @@
 import Data.List (elemIndex, intercalate)
 -- for filtering [Maybe a] -> [a]
 import Data.Maybe (catMaybes)
--- for pretty printing
+-- for string formatting
 import Text.Printf (printf)
 -- for parsing IO String -> IO (Maybe a)
 import Text.Read (readMaybe)
@@ -97,8 +97,7 @@ citiesToString = wrap . concatMap cityRow
 cityRow :: City -> String
 cityRow (City name north east records) =
   printf "| %-12s | %12d | %12d | %12s | %12s |\n" name north east cur pvs
-  where
-    [cur, pvs] = (take 2 . map fmtPopulation) records
+  where [cur, pvs] = (take 2 . map fmtPopulation) records
 
 wrap :: String -> String
 wrap text = (line ++ header ++ line) ++ text ++ line
@@ -107,7 +106,7 @@ header :: String
 header = "|     Name     |  Deg. North  |   Deg. East  |  Population  |   Previous   |\n"
 
 line :: String
-line = "+" ++ intercalate "+" (replicate 5 "--------------") ++ "+\n"
+line = printf "+%s+\n" (intercalate "+" $ replicate 5 "--------------")
 
 -------------------------------------------------
 --                  section four               --
@@ -137,7 +136,7 @@ xs `insert` x = lower ++ (x : higher)
 cityGrowth :: [City] -> Name -> [Growth]
 cityGrowth = fmap (maybe [] mapGrowth) . cityFromName
 
--- (zip <*> tail) == zip xs (tail xs)
+-- zip <*> tail == zip xs (tail xs)
 mapGrowth :: City -> [Growth]
 mapGrowth = map growth . (zip <*> tail) . getRecords
 
@@ -245,7 +244,7 @@ main = do
 
 -- fmap to map over IO monad, map to map over the actual String
 fileToCities :: FilePath -> IO [Maybe City]
-fileToCities = fmap (map readMaybe . lines) . readFile
+fileToCities fp = map readMaybe . lines <$> readFile fp
 
 showOptions :: IO ()
 showOptions = putStr $ underline "Options:" ++
@@ -263,7 +262,7 @@ showOptions = putStr $ underline "Options:" ++
 promptUser :: IO String
 promptUser = do
   putStr "\n\n\ESC[1;2m>>>\ESC[0;2m "
-  getLine >>= (\ln -> putStrLn endFmt >> return ln)
+  getLine >>= (\ ln -> putStrLn endFmt >> return ln)
 
 underline :: String -> String
 underline = ("\ESC[1;4m" ++) . (++ endFmt)
@@ -307,7 +306,7 @@ matchChoice cities choice
   | choice == "7" = doFindCityIO cities
   | choice == "8" = drawCities cities
   | choice `elem` ["4", "5", "9"] = return ()
-  | otherwise = putStrLn $ red "Invalid choice.\n"
+  | otherwise = putStrLn (red "Invalid choice.\n")
 
 getPrettyNamesString :: [City] -> String
 getPrettyNamesString = (underline "City Names:\n\n" ++) . nameList
@@ -322,9 +321,7 @@ getIntIO str = putStr str >> readMaybe <$> promptUser
 getListOfIntsIO :: IO [Int]
 getListOfIntsIO = do
   input <- getIntIO "Please enter an integer (non-integer to finish)"
-  maybe (return []) getList input
-  where
-    getList x = fmap (x :) getListOfIntsIO
+  maybe (return []) (\ i -> (i :) <$> getListOfIntsIO) input  
 
 doFindCityIO :: [City] -> IO ()
 doFindCityIO cities = do
@@ -340,9 +337,9 @@ doPopulationIO :: [City] -> IO ()
 doPopulationIO cities = do
   city <- getCityNameIO
   idx <- getIntIO "Please enter how many years ago to get records (0 for current):"
-  case idx of
-    (Just i) -> printf "Population: %s\n\n" (getPopulation cities city i)
-    Nothing -> putStrLn $ red "Please enter a valid integer.\n"
+  putStrLn $ maybe (red "Please enter valid integer.") (population city) idx
+  where
+    population city = printf "Population: %s\n\n" . getPopulation cities city
 
 doAnnualGrowthIO :: [City] -> IO ()
 doAnnualGrowthIO cities = do
