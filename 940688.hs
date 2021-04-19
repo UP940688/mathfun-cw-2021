@@ -134,7 +134,7 @@ xs `insert` x = lower ++ (x : higher)
 ------------------------------------------------
 
 cityGrowth :: [City] -> Name -> [Growth]
-cityGrowth = fmap (maybe [] mapGrowth) . cityFromName
+cityGrowth cities = maybe [] mapGrowth <$> cityFromName cities
 
 -- zip <*> tail == zip xs (tail xs)
 mapGrowth :: City -> [Growth]
@@ -214,11 +214,10 @@ adjustCursor ys = goTo (0, maximum ys + 4) -- 4 below lowest mapped city
 
 drawCity :: City -> IO Int
 drawCity (City name north east records) = do
-  let (x, y) = locationToPosition (north, east)
   writeAt (x, y) ("+ " ++ name)
-  -- write most recent population record under name
   writeAt (x, y + 1) $ fmtPopulation (head records)
   return y
+  where (x, y) = locationToPosition (north, east)
 
 -- flip y axis, multiply by 2 to increase distance between cities
 locationToPosition :: Location -> ScreenPosition
@@ -232,12 +231,10 @@ main :: IO ()
 main = do
   tmp <- fileToCities "cities.txt"
   let cities = catMaybes tmp
-      (tmpLen, citiesLen) = (length tmp, length cities)
-  let loaded = if tmpLen - citiesLen == 0
-      then green $ printf "%i/%i" citiesLen tmpLen
-      else red $ printf "%i/%i" citiesLen tmpLen
+      (len1, len2) = (length tmp, length cities)
+      colour = if len1 - len2 == 0 then green else red
   -- notify the user how many have been filtered out
-  printf "\nINFO: Loaded %s cities.\n" loaded
+  printf "\nINFO: Loaded %s cities.\n" $ colour (printf "%i/%i" len1 len2)
   putStrLn ('\n' : getPrettyNamesString cities)
   updatedCities <- loopChoices cities
   writeFile "cities.txt" updatedCities
