@@ -233,10 +233,10 @@ main = do
   tmp <- fileToCities "cities.txt"
   let cities = catMaybes tmp
       (tmpLen, citiesLen) = (length tmp, length cities)
+  let loaded = if tmpLen - citiesLen == 0
+      then green $ printf "%i/%i" citiesLen tmpLen
+      else red $ printf "%i/%i" citiesLen tmpLen
   -- notify the user how many have been filtered out
-  loaded <- case tmpLen - citiesLen of
-    0 -> return $ green $ printf "%i/%i" citiesLen tmpLen
-    _ -> return $ red $ printf "%i/%i" citiesLen tmpLen
   printf "\nINFO: Loaded %s cities.\n" loaded
   putStrLn ('\n' : getPrettyNamesString cities)
   updatedCities <- loopChoices cities
