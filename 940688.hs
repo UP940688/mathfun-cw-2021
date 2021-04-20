@@ -1,10 +1,10 @@
--- for finding index of elements and table formatting
+-- For finding index of elements and table formatting
 import Data.List (elemIndex, intercalate)
--- for filtering [Maybe a] -> [a]
+-- For filtering [Maybe a] -> [a]
 import Data.Maybe (catMaybes)
--- for string formatting
+-- For string formatting
 import Text.Printf (printf)
--- for parsing IO String -> IO (Maybe a)
+-- For parsing IO String -> IO (Maybe a)
 import Text.Read (readMaybe)
 
 ------------------------------------------------
@@ -27,6 +27,8 @@ testData =
     City "Warsaw" (Loc 52 21) [1790, 1783, 1776, 1768]
   ]
 
+-- | The City algebraic type should have a Name, Location, and
+-- [Population] list that contains at least two years of data.
 data City = City
   { getName :: Name,
     getLocation :: Location,
@@ -34,34 +36,43 @@ data City = City
   }
   deriving (Eq, Ord, Show, Read)
 
+-- | Comprised of one Int representing Degrees North, one Degrees East.
 data Location = Loc Int Int deriving (Eq, Ord, Show, Read)
 
--- below are defined for easier reading of type signatures
-
+-- | Int representing population in 1000s.
 type Population = Int
 
+-- | Int representing an index to a list.
 type Index = Int
 
+-- | Distance between two Locations calculated via distance formula.
 type Distance = Float
 
+-- | Float representing the percentage growth between two Population types.
 type Growth = Float
 
+-- | String form of Population formatted as X.YZm (or 'no data').
 type FormattedPopulation = String
 
+-- | String representing the name of a city.
 type Name = String
+
+-- | String that is intended to be displayed to Standard Output.
+type OutString = String
 
 --------------------------------------------------------
 --                  helper functions                  --
 --------------------------------------------------------
 
--- allows us to use (toFloat x) rather than (fromIntegral x :: Float)
+-- | Converts an integral (Int/Integer) to a Float.
 toFloat :: Integral a => a -> Float
 toFloat = fromIntegral
 
--- f (a -> b) <*> f (a) = f (b) (beefed up map / fmap)
+-- | Returns (Just City) if given valid name, Nothing otherwise.
 cityFromName :: [City] -> Name -> Maybe City
 cityFromName cities name = Just (cities !!) <*> elemIndex name (getNames cities)
 
+-- | Divides a Population by 1000 and converts to FormattedPopulation.
 fmtPopulation :: Population -> FormattedPopulation
 fmtPopulation = printf "%.3fm" . (/ 1000) . toFloat
 
@@ -69,6 +80,7 @@ fmtPopulation = printf "%.3fm" . (/ 1000) . toFloat
 --                  section one               --
 ------------------------------------------------
 
+-- | Partial function that will map getName over a list of cities.
 getNames :: [City] -> [Name]
 getNames = map getName
 
@@ -76,15 +88,17 @@ getNames = map getName
 --                  section two               --
 ------------------------------------------------
 
+-- | Composes the populationAt and cityFromName functions.
 getPopulation :: [City] -> Name -> Index -> FormattedPopulation
 getPopulation = fmap populationAt . cityFromName
 
+-- | Returns Population for given city in given year, if the index is valid.
 maybeRecord :: Index -> City -> Maybe Population
 maybeRecord i (City _ _ records)
   | i >= 0 && i < length records = Just (records !! i)
   | otherwise = Nothing
 
--- f =<< Nothing = Nothing, f =<< (Just a) =  f
+-- | Returns FormattedPopulation of (Maybe City) from Index years ago.
 populationAt :: Maybe City -> Index -> FormattedPopulation
 populationAt city idx = maybe "no data" fmtPopulation (maybeRecord idx =<< city)
 
@@ -92,35 +106,42 @@ populationAt city idx = maybe "no data" fmtPopulation (maybeRecord idx =<< city)
 --                  section three               --
 --------------------------------------------------
 
-citiesToString :: [City] -> String
+-- | Partial function that composes wrap with concatenated map of cityRow over cities
+citiesToString :: [City] -> OutString
 citiesToString = wrap . concatMap cityRow
 
-cityRow :: City -> String
+-- | Returns a well formatted row of data representing given city
+cityRow :: City -> OutString
 cityRow (City name (Loc n e) records) =
   printf "| %-12s | %12d | %12d | %12s | %12s |\n" name n e cur pvs
   -- take advantage of haskell's laziness -- it will only map 2 elements
   where [cur, pvs] = (take 2 . map fmtPopulation) records
 
-wrap :: String -> String
+-- | Wrap a string with the table header and a footer
+wrap :: String -> OutString
 wrap text = (line ++ header ++ line) ++ text ++ line
 
-header :: String
+-- | Table header intended for use with wrap
+header :: OutString
 header = "|     Name     |  Deg. North  |   Deg. East  |  Population  |   Previous   |\n"
 
--- intercalate :: [a] -> [[a]] -> [a] (joins [[a]] with first argument)
-line :: String
+-- | Line of '-' and '+' chars intended for use with wrap
+line :: OutString
 line = '+' : intercalate "+" (replicate 5 "--------------") ++ "+\n"
 
 -------------------------------------------------
 --                  section four               --
 -------------------------------------------------
 
+-- | Given a list of cities and list of population records, return
+-- an updated list of cities reflecting the new data.
 updateRecords :: [City] -> [Population] -> [City]
 cities `updateRecords` pops = changed ++ unchanged
   where
     changed = zipWith addYear cities pops
     unchanged = drop (length changed) cities
 
+-- | Return new City, shifting population records back one year and prepending one
 addYear :: City -> Population -> City
 addYear (City name loc records) pop = City name loc (pop : records)
 
@@ -128,6 +149,7 @@ addYear (City name loc records) pop = City name loc (pop : records)
 --                  section five               --
 -------------------------------------------------
 
+-- | Insert an element into a sorted list (must implement Ord)
 insert :: (Ord a) => [a] -> a -> [a]
 xs `insert` x = lower ++ (x : higher)
   where (lower, higher) = span (< x) xs
@@ -359,4 +381,4 @@ doinsertIO cities = do
         then return (cities `insert` City name (Loc n e) pops)
         else err "Not enough population figures, not adding city." cities
     ) maybeLoc
-  where err str cities = putStrLn (red str) >> return cities
+  where err str c = putStrLn (red str) >> return c
