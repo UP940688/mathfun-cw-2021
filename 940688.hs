@@ -13,31 +13,30 @@ import Text.Read (readMaybe)
 
 testData :: [City]
 testData =
-  [ City "Amsterdam" 52 5 [1158, 1149, 1140, 1132],
-    City "Athens" 38 23 [3153, 3153, 3154, 3156],
-    City "Berlin" 53 13 [3567, 3562, 3557, 3552],
-    City "Brussels" 51 4 [2096, 2081, 2065, 2050],
-    City "Bucharest" 44 26 [1794, 1803, 1812, 1821],
-    City "London" 52 0 [9426, 9304, 9177, 9046],
-    City "Madrid" 40 4 [6669, 6618, 6559, 6497],
-    City "Paris" 49 2 [11079, 11017, 10958, 10901],
-    City "Rome" 42 13 [4278, 4257, 4234, 4210],
-    City "Sofia" 43 23 [1284, 1281, 1277, 1272],
-    City "Vienna" 48 16 [1945, 1930, 1915, 1901],
-    City "Warsaw" 52 21 [1790, 1783, 1776, 1768]
+  [ City "Amsterdam" (Loc 52 5) [1158, 1149, 1140, 1132],
+    City "Athens" (Loc 38 23) [3153, 3153, 3154, 3156],
+    City "Berlin" (Loc 53 13) [3567, 3562, 3557, 3552],
+    City "Brussels" (Loc 51 4) [2096, 2081, 2065, 2050],
+    City "Bucharest" (Loc 44 26) [1794, 1803, 1812, 1821],
+    City "London" (Loc 52 0) [9426, 9304, 9177, 9046],
+    City "Madrid" (Loc 40 4) [6669, 6618, 6559, 6497],
+    City "Paris" (Loc 49 2) [11079, 11017, 10958, 10901],
+    City "Rome" (Loc 42 13) [4278, 4257, 4234, 4210],
+    City "Sofia" (Loc 43 23) [1284, 1281, 1277, 1272],
+    City "Vienna" (Loc 48 16) [1945, 1930, 1915, 1901],
+    City "Warsaw" (Loc 52 21) [1790, 1783, 1776, 1768]
   ]
 
 data City = City
   { getName :: Name,
-    getNorth :: Int,
-    getEast :: Int,
+    getLocation :: Location,
     getRecords :: [Population]
   }
   deriving (Eq, Ord, Show, Read)
 
--- below are defined for easier reading of type signatures
+data Location = Loc Int Int deriving (Eq, Ord, Show, Read)
 
-type Location = (Int, Int)
+-- below are defined for easier reading of type signatures
 
 type Population = Int
 
@@ -55,7 +54,7 @@ type Name = String
 --                  helper functions                  --
 --------------------------------------------------------
 
--- allows us to (toFloat x) rather than (fromIntegral x :: Float)
+-- allows us to use (toFloat x) rather than (fromIntegral x :: Float)
 toFloat :: Integral a => a -> Float
 toFloat = fromIntegral
 
@@ -81,7 +80,7 @@ getPopulation :: [City] -> Name -> Index -> FormattedPopulation
 getPopulation = fmap populationAt . cityFromName
 
 maybeRecord :: City -> Index -> Maybe Population
-maybeRecord (City _ _ _ records) i
+maybeRecord (City _ _ records) i
   | i >= 0 && i < length records = Just (records !! i)
   | otherwise = Nothing
 
@@ -99,9 +98,9 @@ citiesToString :: [City] -> String
 citiesToString = wrap . concatMap cityRow
 
 cityRow :: City -> String
-cityRow (City name north east records) =
-  printf "| %-12s | %12d | %12d | %12s | %12s |\n" name north east cur pvs
-  -- take advantage of haskell's laziness here (it will only map 2 elements)
+cityRow (City name (Loc n e) records) =
+  printf "| %-12s | %12d | %12d | %12s | %12s |\n" name n e cur pvs
+  -- take advantage of haskell's laziness -- it will only map 2 elements
   where [cur, pvs] = (take 2 . map fmtPopulation) records
 
 wrap :: String -> String
@@ -121,11 +120,11 @@ line = '+' : intercalate "+" (replicate 5 "--------------") ++ "+\n"
 updateRecords :: [City] -> [Population] -> [City]
 cities `updateRecords` pops = changed ++ unchanged
   where
-    changed = zipWith addYearToRecord cities pops
+    changed = zipWith addYear cities pops
     unchanged = drop (length changed) cities
 
-addYearToRecord :: City -> Population -> City
-addYearToRecord (City name n e records) pop = City name n e (pop : records)
+addYear :: City -> Population -> City
+addYear (City name loc records) pop = City name loc (pop : records)
 
 -------------------------------------------------
 --                  section five               --
@@ -143,7 +142,7 @@ xs `insert` x = lower ++ (x : higher)
 cityGrowth :: [City] -> Name -> [Growth]
 cityGrowth cities = maybe [] mapGrowth <$> cityFromName cities
 
--- (zip <*> tail) == zip xs (tail xs), convenient for pointfree notation
+-- (zip <*> tail) xs == zip xs (tail xs), convenient for pointfree notation
 mapGrowth :: City -> [Growth]
 mapGrowth = map growth . (zip <*> tail) . getRecords
 
@@ -161,14 +160,11 @@ nearestCity :: [City] -> Location -> Population -> Maybe City
 nearestCity cities loc pop = Just (cities !!) <*> minIndex candidates
   where
     -- y =<< x is equivalent to (x >>= (\a -> y a)) (feeds result of x to y)
-    minIndex = (elemIndex =<< minimum) . distancesTo loc
-    candidates = filter (\ (City _ _ _ pops) -> head pops > pop) cities
-
-distancesTo :: Location -> [City] -> [Distance]
-distancesTo target = map (\ (City _ n e _) -> distance (n, e) target)
+    minIndex = (elemIndex =<< minimum) . map (distance loc . getLocation)
+    candidates = filter (\ (City _ _ pops) -> head pops > pop) cities
 
 distance :: Location -> Location -> Distance
-distance (x1, y1) (x2, y2) = sqrt . toFloat $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
+distance (Loc x y) (Loc x2 y2) = sqrt . toFloat $ (x - x2) ^ 2 + (y - y2) ^ 2
 
 ------------------------------------------------------
 --                  demo execution                  --
@@ -181,9 +177,9 @@ demo 3 = putStr (citiesToString testData)
 demo 4 = putStr . citiesToString $ updateRecords testData
   [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
 demo 5 = putStr . citiesToString $
-  testData `insert` City "Prague" 50 14 [1312, 1306, 1299, 1292]
+  testData `insert` City "Prague" (Loc 50 14) [1312, 1306, 1299, 1292]
 demo 6 = print (cityGrowth testData "London")
-demo 7 = putStrLn (nearestCityName testData (54, 6) 2000)
+demo 7 = putStrLn (nearestCityName testData (Loc 54 6) 2000)
 demo 8 = drawCities testData
 demo _ = putStrLn "Please pick a number 1-8."
 
@@ -220,15 +216,16 @@ adjustCursor :: [Int] -> IO ()
 adjustCursor ys = goTo (0, maximum ys + 4) -- 4 below lowest mapped city
 
 drawCity :: City -> IO Int
-drawCity (City name north east records) = do
+drawCity (City name loc records) = do
   writeAt (x, y) ("+ " ++ name)
-  writeAt (x, y + 1) $ fmtPopulation (head records)
+  -- x $ f a b is equivalent to x (f a b)
+  writeAt (x, y + 1) $ (fmtPopulation . head) records
   return y
-  where (x, y) = locationToPosition (north, east)
+  where (x, y) = locationToPosition loc
 
 -- flip y axis, multiply by 2 to increase distance between cities
 locationToPosition :: Location -> ScreenPosition
-locationToPosition (north, east) = (east * 2, abs (north - 54) * 2)
+locationToPosition (Loc n e) = (e * 2, abs (n - 54) * 2)
 
 ------------------------------------------------------
 --                  user interface                  --
@@ -241,7 +238,7 @@ main = do
       (len1, len2) = (length tmp, length cities)
       colour = if len1 - len2 == 0 then green else red
   -- notify the user how many have been filtered out
-  printf "\nINFO: Loaded %s cities.\n" $ colour (printf "%i/%i" len1 len2)
+  printf "\nINFO: Loaded %s cities.\n" $ colour (printf "%i/%i" len2 len1)
   putStrLn ('\n' : getPrettyNamesString cities)
   updatedCities <- loopChoices cities
   writeFile "cities.txt" updatedCities
@@ -314,7 +311,7 @@ matchChoice cities choice
 
 getPrettyNamesString :: [City] -> String
 getPrettyNamesString = (underline "City Names:\n\n" ++) . nameList
-  where nameList = concatMap (\ (City name _ _ _) -> printf "• %s\n" name)
+  where nameList = concatMap (\ (City name _ _) -> printf "• %s\n" name)
 
 getCityNameIO :: IO Name
 getCityNameIO = putStr "Please enter city name:" >> promptUser
@@ -334,7 +331,7 @@ doFindCityIO cities = do
   pop <- getIntIO "Please enter minimum population city should have:"
   case (north, east, pop) of
     (Just n, Just e, Just p) ->
-      printf "Nearest City: %s\n\n" (nearestCityName cities (n, e) p)
+      printf "Nearest City: %s\n\n" (nearestCityName cities (Loc n e) p)
     _ -> putStrLn $ red "Invalid population figure entered."
 
 doPopulationIO :: [City] -> IO ()
@@ -362,7 +359,7 @@ doinsertIO cities = do
   records <- getListOfIntsIO
   case (north, east) of
     (Just n, Just e)
-      | length records >= 2 -> return (cities `insert` City name n e records)
+      | length records >= 2 -> return (cities `insert` City name (Loc n e) records)
       | otherwise -> do
           putStrLn $ red "Not enough population figures, not adding city.\n"
           return cities
