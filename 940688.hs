@@ -71,7 +71,7 @@ toFloat = fromIntegral
 
 -- | Returns (Just City) if given valid name, Nothing otherwise.
 cityFromName :: [City] -> Name -> Maybe City
-cityFromName cities name = Just (cities !!) <*> elemIndex name (getNames cities)
+cityFromName cities = fmap (cities !!) . (`elemIndex` getNames cities)
 
 -- | Divides a Population by 1000 and converts to FormattedPopulation.
 fmtPopulation :: Population -> FormattedPopulation
@@ -115,8 +115,7 @@ citiesToString = wrap . concatMap cityRow
 cityRow :: City -> OutString
 cityRow (City name (Loc n e) records) =
   printf "| %-12s | %12d | %12d | %12s | %12s |\n" name n e cur pvs
-  -- take advantage of haskell's laziness -- it will only map 2 elements.
-  where [cur, pvs] = (take 2 . map fmtPopulation) records
+  where [cur, pvs] = map fmtPopulation (take 2 records)
 
 -- | Wrap a string with the table header and a footer.
 wrap :: String -> OutString
@@ -137,10 +136,8 @@ line = '+' : intercalate "+" (replicate 5 "--------------") ++ "+\n"
 -- | Given a list of cities and list of population records, return
 -- an updated list of cities reflecting the new data.
 updateRecords :: [City] -> [Population] -> [City]
-cities `updateRecords` pops = changed ++ unchanged
-  where
-    changed = zipWith addYear cities pops
-    unchanged = drop (length changed) cities
+cities `updateRecords` pops = changed ++ drop (length changed) cities
+  where changed = zipWith addYear cities pops
 
 -- | Return new City, shifting population records back one year and prepending one.
 addYear :: City -> Population -> City
@@ -150,7 +147,7 @@ addYear (City name loc records) pop = City name loc (pop : records)
 --                  section five               --
 -------------------------------------------------
 
--- | Insert an element into a sorted list (must implement Ord).
+-- | Insert an element a into a sorted list [a] (must implement Ord).
 insert :: (Ord a) => [a] -> a -> [a]
 xs `insert` x = lower ++ (x : higher)
   where (lower, higher) = span (< x) xs
@@ -162,12 +159,11 @@ xs `insert` x = lower ++ (x : higher)
 -- | Matches a city name to a City and either returns the output of mapGrowth
 -- or returns an empty array if no city was found.
 cityGrowth :: [City] -> Name -> [Growth]
--- <$> = infixr fmap (map for all functors), where (a -> b) <$> f (a) = f (b)
-cityGrowth cities = maybe [] mapGrowth <$> cityFromName cities
+cityGrowth cities = maybe [] mapGrowth . cityFromName cities
 
 -- | Partial function that returns Growth between each pair of years for a City
 mapGrowth :: City -> [Growth]
--- (zip <*> tail) xs == zip xs (tail xs), convenient for pointfree notation
+-- (zip <*> tail) xs == zip xs (tail xs)
 mapGrowth = map growth . (zip <*> tail) . getRecords
 
 -- | Calculates the percentage growth between Population A and B.
@@ -180,17 +176,16 @@ growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
 
 -- | Return the name (or 'no data') of the nearest city to a provided location.
 nearestCityName :: [City] -> Location -> Population -> Name
-nearestCityName cities = fmap (maybe "no data" getName) . nearestCity cities
+nearestCityName = ((maybe "no data" getName .) .) . nearestCity
 
 -- | Return (Just City) with the smallest calculated distance to provided
 -- Location, with a population above the limit provided. Will return Nothing
 -- if no suitable candidates can be found.
 nearestCity :: [City] -> Location -> Population -> Maybe City
-nearestCity cities loc pop = Just (cities !!) <*> minIndex candidates
+nearestCity cities loc pop = (cities !!) <$> elemIndex (minimum dists) dists
   where
-    -- y =<< x is equivalent to (x >>= (\a -> y a)) (feeds result of x to y)
-    minIndex = (elemIndex =<< minimum) . map (distance loc . getLocation)
-    candidates = filter (\ (City _ _ pops) -> head pops > pop) cities
+    dists = map (distance loc . getLocation) candidates
+    candidates = filter ((pop <) . head . getRecords) cities
 
 -- | Returns the distance between two locations.
 distance :: Location -> Location -> Distance
@@ -254,8 +249,8 @@ drawCity (City name loc records) = do
   return (y + 1)
   where (x, y) = locationToPosition loc
 
--- | Convert a (N, E) Location to an (X, Y) ScreenPosition that
--- can be plotted accurately to a 80x50 terminal window.
+-- | Convert a (N, E) Location to an (X, Y) ScreenPosition *that
+-- can be plotted within a 80x50 terminal window*.
 locationToPosition :: Location -> ScreenPosition
 locationToPosition (Loc n e) = (e * 2, abs (n - 54) * 2)
 
@@ -343,7 +338,7 @@ matchChoice cities choice
 
 getPrettyNamesString :: [City] -> String
 getPrettyNamesString = (underline "City Names:\n" ++) . nameList
-  where nameList = concatMap (\ (City name _ _) -> printf "\n• %s" name)
+  where nameList = concatMap (printf "\n• %s" . getName)
 
 getCityNameIO :: IO Name
 getCityNameIO = putStr "Please enter city name:" >> promptUser
@@ -357,7 +352,7 @@ getLocationIO str = putStr str >> readMaybe <$> promptUser
 getListOfIntsIO :: IO [Int]
 getListOfIntsIO = do
   input <- getIntIO "Please enter an integer (non-integer to finish)"
-  maybe (return []) (\ i -> (i :) <$> getListOfIntsIO) input
+  maybe (return []) (\ int -> (int :) <$> getListOfIntsIO) input
 
 doFindCityIO :: [City] -> IO ()
 doFindCityIO cities = do
@@ -372,13 +367,12 @@ doPopulationIO cities = do
   name <- getCityNameIO
   idx <- getIntIO "Please enter how many years ago to get records (0 = current):"
   putStrLn $ maybe (red "Please enter valid integer.") (populationOf name) idx
-  where
-    populationOf name = printf "Population: %s" . getPopulation cities name
+  where populationOf = (printf "Population: %s" .) . getPopulation cities
 
 doAnnualGrowthIO :: [City] -> IO ()
 doAnnualGrowthIO cities = do
   name <- getCityNameIO
-  let growths = concat $ printf "\n• %.2f%%" <$> cityGrowth cities name
+  let growths = concatMap (printf "\n• %.2f%%") (cityGrowth cities name)
   putStrLn $ if null growths
     then "No data available."
     else underline "Annual Growth Figures:\n" ++ growths
