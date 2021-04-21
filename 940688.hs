@@ -29,6 +29,7 @@ testData =
 
 -- | The City algebraic type should have a Name, Location, and
 -- [Population] list that contains at least two years of data.
+-- Implements Ord, so cities can be sorted alphabetically by name.
 data City = City
   { getName :: Name,
     getLocation :: Location,
@@ -45,13 +46,13 @@ type Population = Int
 -- | Int representing an index to a list.
 type Index = Int
 
--- | Distance between two Locations calculated via distance formula.
+-- | Float representing distance between two Locations (distance formula).
 type Distance = Float
 
 -- | Float representing the percentage growth between two Population types.
 type Growth = Float
 
--- | String form of Population formatted as X.YZm (or 'no data').
+-- | String representing Population formatted as X.YZm (or 'no data').
 type FormattedPopulation = String
 
 -- | String representing the name of a city.
@@ -106,26 +107,26 @@ populationAt city idx = maybe "no data" fmtPopulation (maybeRecord idx =<< city)
 --                  section three               --
 --------------------------------------------------
 
--- | Partial function that composes wrap with concatenated map of cityRow over cities
+-- | Partial function that composes wrap with concatenated map of cityRow over cities.
 citiesToString :: [City] -> OutString
 citiesToString = wrap . concatMap cityRow
 
--- | Returns a well formatted row of data representing given city
+-- | Returns a well formatted row of data representing given city.
 cityRow :: City -> OutString
 cityRow (City name (Loc n e) records) =
   printf "| %-12s | %12d | %12d | %12s | %12s |\n" name n e cur pvs
-  -- take advantage of haskell's laziness -- it will only map 2 elements
+  -- take advantage of haskell's laziness -- it will only map 2 elements.
   where [cur, pvs] = (take 2 . map fmtPopulation) records
 
--- | Wrap a string with the table header and a footer
+-- | Wrap a string with the table header and a footer.
 wrap :: String -> OutString
 wrap text = (line ++ header ++ line) ++ text ++ line
 
--- | Table header intended for use with wrap
+-- | Table header (intended for use with wrap).
 header :: OutString
 header = "|     Name     |  Deg. North  |   Deg. East  |  Population  |   Previous   |\n"
 
--- | Line of '-' and '+' chars intended for use with wrap
+-- | Line of '-' and '+' chars (intended for use with wrap).
 line :: OutString
 line = '+' : intercalate "+" (replicate 5 "--------------") ++ "+\n"
 
@@ -141,7 +142,7 @@ cities `updateRecords` pops = changed ++ unchanged
     changed = zipWith addYear cities pops
     unchanged = drop (length changed) cities
 
--- | Return new City, shifting population records back one year and prepending one
+-- | Return new City, shifting population records back one year and prepending one.
 addYear :: City -> Population -> City
 addYear (City name loc records) pop = City name loc (pop : records)
 
@@ -149,7 +150,7 @@ addYear (City name loc records) pop = City name loc (pop : records)
 --                  section five               --
 -------------------------------------------------
 
--- | Insert an element into a sorted list (must implement Ord)
+-- | Insert an element into a sorted list (must implement Ord).
 insert :: (Ord a) => [a] -> a -> [a]
 xs `insert` x = lower ++ (x : higher)
   where (lower, higher) = span (< x) xs
@@ -158,14 +159,18 @@ xs `insert` x = lower ++ (x : higher)
 --                  section six               --
 ------------------------------------------------
 
--- <$> = infixr fmap (map for all functors), where (a -> b) <$> f (a) = f (b)
+-- | Matches a city name to a City and either returns the output of mapGrowth
+-- or returns an empty array if no city was found.
 cityGrowth :: [City] -> Name -> [Growth]
+-- <$> = infixr fmap (map for all functors), where (a -> b) <$> f (a) = f (b)
 cityGrowth cities = maybe [] mapGrowth <$> cityFromName cities
 
--- (zip <*> tail) xs == zip xs (tail xs), convenient for pointfree notation
+-- | Partial function that returns Growth between each pair of years for a City
 mapGrowth :: City -> [Growth]
+-- (zip <*> tail) xs == zip xs (tail xs), convenient for pointfree notation
 mapGrowth = map growth . (zip <*> tail) . getRecords
 
+-- | Calculates the percentage growth between Population A and B.
 growth :: (Population, Population) -> Growth
 growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
 
@@ -173,9 +178,13 @@ growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
 --                  section seven               --
 --------------------------------------------------
 
+-- | Return the name (or 'no data') of the nearest city to a provided location.
 nearestCityName :: [City] -> Location -> Population -> Name
 nearestCityName cities = fmap (maybe "no data" getName) . nearestCity cities
 
+-- | Return (Just City) with the smallest calculated distance to provided
+-- Location, with a population above the limit provided. Will return Nothing
+-- if no suitable candidates can be found.
 nearestCity :: [City] -> Location -> Population -> Maybe City
 nearestCity cities loc pop = Just (cities !!) <*> minIndex candidates
   where
@@ -183,6 +192,7 @@ nearestCity cities loc pop = Just (cities !!) <*> minIndex candidates
     minIndex = (elemIndex =<< minimum) . map (distance loc . getLocation)
     candidates = filter (\ (City _ _ pops) -> head pops > pop) cities
 
+-- | Returns the distance between two locations.
 distance :: Location -> Location -> Distance
 distance (Loc x y) (Loc x2 y2) = sqrt . toFloat $ (x - x2) ^ 2 + (y - y2) ^ 2
 
@@ -227,22 +237,25 @@ writeAt position text = do
 --                  population map                  --
 ------------------------------------------------------
 
--- IO is a Monad, so use mapM(onad) to apply drawCity to each city
--- x >> y roughly means 'do x, then y'
+-- | Clear the screen, plot a list of cities to the screen, then adjust cursor.
 drawCities :: [City] -> IO ()
 drawCities cities = clearScreen >> mapM drawCity cities >>= adjustCursor
 
+-- | Move the cursor to 3 lines below the lowest Y axis point passed.
 adjustCursor :: [Int] -> IO ()
-adjustCursor ys = goTo (0, maximum ys + 4) -- 4 below lowest mapped city
+adjustCursor ys = goTo (0, maximum ys + 3)
 
+-- | Plot a city's name and last population to a terminal window,
+-- Returning the line number the city was drawn to.
 drawCity :: City -> IO Int
 drawCity (City name loc records) = do
   writeAt (x, y) ("+ " ++ name)
   writeAt (x, y + 1) $ (fmtPopulation . head) records
-  return y
+  return (y + 1)
   where (x, y) = locationToPosition loc
 
--- flip y axis, multiply by 2 to increase distance between cities
+-- | Convert a (N, E) Location to an (X, Y) ScreenPosition that
+-- can be plotted accurately to a 80x50 terminal window.
 locationToPosition :: Location -> ScreenPosition
 locationToPosition (Loc n e) = (e * 2, abs (n - 54) * 2)
 
