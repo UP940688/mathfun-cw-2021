@@ -8,23 +8,23 @@ import Text.Printf (printf)
 import Text.Read (readMaybe)
 
 ------------------------------------------------
---                   types                    --
+--            types + test data               --
 ------------------------------------------------
 
 testData :: [City]
 testData =
-  [ City "Amsterdam" (Loc 52 5) [1158, 1149, 1140, 1132],
-    City "Athens" (Loc 38 23) [3153, 3153, 3154, 3156],
-    City "Berlin" (Loc 53 13) [3567, 3562, 3557, 3552],
-    City "Brussels" (Loc 51 4) [2096, 2081, 2065, 2050],
-    City "Bucharest" (Loc 44 26) [1794, 1803, 1812, 1821],
-    City "London" (Loc 52 0) [9426, 9304, 9177, 9046],
-    City "Madrid" (Loc 40 4) [6669, 6618, 6559, 6497],
-    City "Paris" (Loc 49 2) [11079, 11017, 10958, 10901],
-    City "Rome" (Loc 42 13) [4278, 4257, 4234, 4210],
-    City "Sofia" (Loc 43 23) [1284, 1281, 1277, 1272],
-    City "Vienna" (Loc 48 16) [1945, 1930, 1915, 1901],
-    City "Warsaw" (Loc 52 21) [1790, 1783, 1776, 1768]
+  [ City "Amsterdam" (52, 5) [1158, 1149, 1140, 1132],
+    City "Athens" (38, 23) [3153, 3153, 3154, 3156],
+    City "Berlin" (53, 13) [3567, 3562, 3557, 3552],
+    City "Brussels" (51, 4) [2096, 2081, 2065, 2050],
+    City "Bucharest" (44, 26) [1794, 1803, 1812, 1821],
+    City "London" (52, 0) [9426, 9304, 9177, 9046],
+    City "Madrid" (40, 4) [6669, 6618, 6559, 6497],
+    City "Paris" (49, 2) [11079, 11017, 10958, 10901],
+    City "Rome" (42, 13) [4278, 4257, 4234, 4210],
+    City "Sofia" (43, 23) [1284, 1281, 1277, 1272],
+    City "Vienna" (48, 16) [1945, 1930, 1915, 1901],
+    City "Warsaw" (52, 21) [1790, 1783, 1776, 1768]
   ]
 
 -- | The City algebraic type should have a Name, Location, and
@@ -38,7 +38,7 @@ data City = City
   deriving (Eq, Ord, Show, Read)
 
 -- | Comprised of one Int representing Degrees North, one Degrees East.
-data Location = Loc Int Int deriving (Eq, Ord, Show, Read)
+type Location = (Int, Int)
 
 -- | Int representing population in 1000s.
 type Population = Int
@@ -74,8 +74,8 @@ cityFromName :: [City] -> Name -> Maybe City
 cityFromName cities = fmap (cities !!) . (`elemIndex` getNames cities)
 
 -- | Divides a Population by 1000 and converts to FormattedPopulation.
-fmtPopulation :: Population -> FormattedPopulation
-fmtPopulation = printf "%.3fm" . (/ 1000) . toFloat
+fmtRecord :: Population -> FormattedPopulation
+fmtRecord = printf "%.3fm" . (/ 1000) . toFloat
 
 ------------------------------------------------
 --                  section one               --
@@ -101,7 +101,7 @@ maybeRecord i (City _ _ records)
 
 -- | Returns FormattedPopulation of (Maybe City) from Index years ago.
 populationAt :: Maybe City -> Index -> FormattedPopulation
-populationAt city idx = maybe "no data" fmtPopulation (maybeRecord idx =<< city)
+populationAt city = maybe "no data" fmtRecord . (city >>=) . maybeRecord
 
 --------------------------------------------------
 --                  section three               --
@@ -113,9 +113,8 @@ citiesToString = wrap . concatMap cityRow
 
 -- | Returns a well formatted row of data representing given city.
 cityRow :: City -> OutString
-cityRow (City name (Loc n e) records) =
-  printf "| %-12s | %12d | %12d | %12s | %12s |\n" name n e cur pvs
-  where [cur, pvs] = map fmtPopulation (take 2 records)
+cityRow (City nm (n, e) (x:y:_)) = printf
+  "| %-10s | %10d | %10d | %10s | %10s |\n" nm n e (fmtRecord x) (fmtRecord y)
 
 -- | Wrap a string with the table header and a footer.
 wrap :: String -> OutString
@@ -123,11 +122,11 @@ wrap text = (line ++ header ++ line) ++ text ++ line
 
 -- | Table header (intended for use with wrap).
 header :: OutString
-header = "|     Name     |  Deg. North  |   Deg. East  |  Population  |   Previous   |\n"
+header = "|    Name    | Deg. North |  Deg. East | Population |  Last Year |\n"
 
 -- | Line of '-' and '+' chars (intended for use with wrap).
 line :: OutString
-line = '+' : intercalate "+" (replicate 5 "--------------") ++ "+\n"
+line = '+' : intercalate "+" (replicate 5 "------------") ++ "+\n"
 
 -------------------------------------------------
 --                  section four               --
@@ -176,7 +175,7 @@ growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
 
 -- | Return the name (or 'no data') of the nearest city to a provided location.
 nearestCityName :: [City] -> Location -> Population -> Name
-nearestCityName = ((maybe "no data" getName .) .) . nearestCity
+nearestCityName cities = (maybe "no data" getName .) . nearestCity cities
 
 -- | Return (Just City) with the smallest calculated distance to provided
 -- Location, with a population above the limit provided. Will return Nothing
@@ -189,7 +188,7 @@ nearestCity cities loc pop = (cities !!) <$> elemIndex (minimum dists) dists
 
 -- | Returns the distance between two locations.
 distance :: Location -> Location -> Distance
-distance (Loc x y) (Loc x2 y2) = sqrt . toFloat $ (x - x2) ^ 2 + (y - y2) ^ 2
+distance (x, y) (x2, y2) = sqrt . toFloat $ (x - x2) ^ 2 + (y - y2) ^ 2
 
 ------------------------------------------------------
 --                  demo execution                  --
@@ -202,9 +201,9 @@ demo 3 = putStr (citiesToString testData)
 demo 4 = putStr . citiesToString $ updateRecords testData
   [1200, 3200, 3600, 2100, 1800, 9500, 6700, 11100, 4300, 1300, 2000, 1800]
 demo 5 = putStr . citiesToString $
-  testData `insert` City "Prague" (Loc 50 14) [1312, 1306, 1299, 1292]
+  testData `insert` City "Prague" (50, 14) [1312, 1306, 1299, 1292]
 demo 6 = print (cityGrowth testData "London")
-demo 7 = putStrLn (nearestCityName testData (Loc 54 6) 2000)
+demo 7 = putStrLn (nearestCityName testData (54, 6) 2000)
 demo 8 = drawCities testData
 demo _ = putStrLn "Please pick a number 1-8."
 
@@ -245,14 +244,14 @@ adjustCursor ys = goTo (0, maximum ys + 3)
 drawCity :: City -> IO Int
 drawCity (City name loc records) = do
   writeAt (x, y) ("+ " ++ name)
-  writeAt (x, y + 1) $ (fmtPopulation . head) records
+  writeAt (x, y + 1) $ (fmtRecord . head) records
   return (y + 1)
   where (x, y) = locationToPosition loc
 
 -- | Convert a (N, E) Location to an (X, Y) ScreenPosition *that
 -- can be plotted within a 80x50 terminal window*.
 locationToPosition :: Location -> ScreenPosition
-locationToPosition (Loc n e) = (e * 2, abs (n - 54) * 2)
+locationToPosition (n, e) = (e * 2, abs (n - 54) * 2)
 
 ------------------------------------------------------
 --                  user interface                  --
@@ -262,10 +261,10 @@ main :: IO ()
 main = do
   tmp <- fileToCities "cities.txt"
   let cities = catMaybes tmp
-      (len1, len2) = (length tmp, length cities)
-      colour = if len1 - len2 == 0 then green else red
+      (lenT, lenC) = (length tmp, length cities)
+      colour = if lenT - lenC == 0 then green else red
   -- notify the user how many have been filtered out
-  printf "\nINFO: Loaded %s cities.\n\n" $ colour (printf "%i/%i" len2 len1)
+  printf "\nINFO: Loaded %s cities.\n\n" (colour $ printf "%i/%i" lenC lenT)
   putStrLn (getPrettyNamesString cities)
   updatedCities <- loopChoices cities
   writeFile "cities.txt" updatedCities
@@ -292,16 +291,16 @@ promptUser = do
   putStr "\n\n\ESC[1;2m>>>\ESC[0;2m "
   getLine >>= (\ ln -> putStrLn endFmt >> return ln)
 
-underline :: String -> String
+underline :: String -> OutString
 underline = ("\ESC[1;4m" ++) . (++ endFmt)
 
-red :: String -> String
+red :: String -> OutString
 red = ("\ESC[31m" ++) . (++ endFmt)
 
-green :: String -> String
+green :: String -> OutString
 green = ("\ESC[32m" ++) . (++ endFmt)
 
-endFmt :: String
+endFmt :: OutString
 endFmt = "\ESC[0m"
 
 loopChoices :: [City] -> IO String
@@ -312,12 +311,12 @@ loopChoices cities = do
   -- options that don't alter city data
   updatedCities <- case choice of
     "4" -> do
-      new <- fmap (updateRecords cities) getListOfIntsIO
-      putStr $ citiesToString new
+      new <- updateRecords cities <$> getListOfIntsIO
+      putStr (citiesToString new)
       return new
     "5" -> do
       new <- doinsertIO cities
-      putStr $ citiesToString new
+      putStr (citiesToString new)
       return new
     _ -> matchChoice cities choice >> return cities
 
@@ -340,14 +339,17 @@ getPrettyNamesString :: [City] -> String
 getPrettyNamesString = (underline "City Names:\n" ++) . nameList
   where nameList = concatMap (printf "\n• %s" . getName)
 
+promptInput :: String -> IO String
+promptInput str = putStr str >> promptUser
+
 getCityNameIO :: IO Name
-getCityNameIO = putStr "Please enter city name:" >> promptUser
+getCityNameIO = promptInput "Please enter city name:"
 
 getIntIO :: String -> IO (Maybe Int)
-getIntIO str = putStr str >> readMaybe <$> promptUser
+getIntIO = fmap readMaybe . promptInput
 
-getLocationIO :: String -> IO (Maybe (Int, Int))
-getLocationIO str = putStr str >> readMaybe <$> promptUser
+getLocationIO :: String -> IO (Maybe Location)
+getLocationIO = fmap readMaybe . promptInput
 
 getListOfIntsIO :: IO [Int]
 getListOfIntsIO = do
@@ -359,7 +361,7 @@ doFindCityIO cities = do
   loc <- getLocationIO "Please enter city's location in form (N, E):"
   pop <- getIntIO "Please enter minimum population city should have:"
   putStrLn $ case (loc, pop) of
-    (Just (n, e), Just p) -> "Nearest City: " ++ nearestCityName cities (Loc n e) p
+    (Just l, Just p) -> "Nearest City: " ++ nearestCityName cities l p
     _ -> red "Invalid population figure entered."
 
 doPopulationIO :: [City] -> IO ()
@@ -367,7 +369,7 @@ doPopulationIO cities = do
   name <- getCityNameIO
   idx <- getIntIO "Please enter how many years ago to get records (0 = current):"
   putStrLn $ maybe (red "Please enter valid integer.") (populationOf name) idx
-  where populationOf = (printf "Population: %s" .) . getPopulation cities
+  where populationOf name = ("Population: " ++) . getPopulation cities name
 
 doAnnualGrowthIO :: [City] -> IO ()
 doAnnualGrowthIO cities = do
@@ -383,9 +385,9 @@ doinsertIO cities = do
   maybeLoc <- getLocationIO "Please enter city's location in form (N, E):"
   putStrLn "Please enter population figures (from most recent, 2+ entries)"
   pops <- getListOfIntsIO
-  maybe (err "Invalid data, not adding city." cities) (\ (n, e) ->
+  maybe (err "Invalid data, not adding city." cities) (\ loc ->
       if length pops >= 2
-        then return (cities `insert` City name (Loc n e) pops)
+        then return (cities `insert` City name loc pops)
         else err "Not enough population figures, not adding city." cities
     ) maybeLoc
   where err str c = putStrLn (red str) >> return c
