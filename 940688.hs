@@ -27,9 +27,6 @@ testData =
     City "Warsaw" (52, 21) [1790, 1783, 1776, 1768]
   ]
 
--- | The City algebraic type should have a Name, Location, and
--- [Population] list that contains at least two years of data.
--- Implements Ord, so cities can be sorted alphabetically by name.
 data City = City
   { getName :: Name,
     getLocation :: Location,
@@ -37,35 +34,26 @@ data City = City
   }
   deriving (Eq, Ord, Show, Read)
 
--- | Comprised of one Int representing Degrees North, one Degrees East.
 type Location = (Int, Int)
 
--- | Int representing population in 1000s.
 type Population = Int
 
--- | Int representing an index to a list.
 type Index = Int
 
--- | Float representing distance between two Locations (distance formula).
 type Distance = Float
 
--- | Float representing the percentage growth between two Population types.
 type Growth = Float
 
--- | String representing Population formatted as X.YZm (or 'no data').
 type FormattedPopulation = String
 
--- | String representing the name of a city.
 type Name = String
 
--- | String that is intended to be displayed to Standard Output.
 type OutString = String
 
 --------------------------------------------------------
 --                  helper functions                  --
 --------------------------------------------------------
 
--- | Converts an integral (Int/Integer) to a Float.
 toFloat :: Integral a => a -> Float
 toFloat = fromIntegral
 
@@ -73,7 +61,6 @@ toFloat = fromIntegral
 cityFromName :: [City] -> Name -> Maybe City
 cityFromName cities = fmap (cities !!) . (`elemIndex` getNames cities)
 
--- | Divides a Population by 1000 and converts to FormattedPopulation.
 fmtRecord :: Population -> FormattedPopulation
 fmtRecord = printf "%.3fm" . (/ 1000) . toFloat
 
@@ -81,7 +68,6 @@ fmtRecord = printf "%.3fm" . (/ 1000) . toFloat
 --                  section one               --
 ------------------------------------------------
 
--- | Partial function that will map getName over a list of cities.
 getNames :: [City] -> [Name]
 getNames = map getName
 
@@ -89,11 +75,9 @@ getNames = map getName
 --                  section two               --
 ------------------------------------------------
 
--- | Composes the populationAt and cityFromName functions.
 getPopulation :: [City] -> Name -> Index -> FormattedPopulation
-getPopulation = fmap populationAt . cityFromName
+getPopulation = (populationAt .) .  cityFromName
 
--- | Returns Population for given city in given year, if the index is valid.
 maybeRecord :: Index -> City -> Maybe Population
 maybeRecord i (City _ _ records)
   | i >= 0 && i < length records = Just (records !! i)
@@ -107,24 +91,19 @@ populationAt city = maybe "no data" fmtRecord . (city >>=) . maybeRecord
 --                  section three               --
 --------------------------------------------------
 
--- | Partial function that composes wrap with concatenated map of cityRow over cities.
 citiesToString :: [City] -> OutString
 citiesToString = wrap . concatMap cityRow
 
--- | Returns a well formatted row of data representing given city.
 cityRow :: City -> OutString
 cityRow (City nm (n, e) (x:y:_)) = printf
   "| %-10s | %10d | %10d | %10s | %10s |\n" nm n e (fmtRecord x) (fmtRecord y)
 
--- | Wrap a string with the table header and a footer.
 wrap :: String -> OutString
 wrap text = (line ++ header ++ line) ++ text ++ line
 
--- | Table header (intended for use with wrap).
 header :: OutString
 header = "|    Name    | Deg. North |  Deg. East | Population |  Last Year |\n"
 
--- | Line of '-' and '+' chars (intended for use with wrap).
 line :: OutString
 line = '+' : intercalate "+" (replicate 5 "------------") ++ "+\n"
 
@@ -138,7 +117,6 @@ updateRecords :: [City] -> [Population] -> [City]
 cities `updateRecords` pops = changed ++ drop (length changed) cities
   where changed = zipWith addYear cities pops
 
--- | Return new City, shifting population records back one year and prepending one.
 addYear :: City -> Population -> City
 addYear (City name loc records) pop = City name loc (pop : records)
 
@@ -146,26 +124,22 @@ addYear (City name loc records) pop = City name loc (pop : records)
 --                  section five               --
 -------------------------------------------------
 
--- | Insert an element a into a sorted list [a] (must implement Ord).
 insert :: (Ord a) => [a] -> a -> [a]
 xs `insert` x = lower ++ (x : higher)
+   -- span splits [a] into ([a], [a]) based on boolean result of each a on function
   where (lower, higher) = span (< x) xs
 
 ------------------------------------------------
 --                  section six               --
 ------------------------------------------------
 
--- | Matches a city name to a City and either returns the output of mapGrowth
--- or returns an empty array if no city was found.
 cityGrowth :: [City] -> Name -> [Growth]
 cityGrowth cities = maybe [] mapGrowth . cityFromName cities
 
--- | Partial function that returns Growth between each pair of years for a City
 mapGrowth :: City -> [Growth]
 -- (zip <*> tail) xs == zip xs (tail xs)
 mapGrowth = map growth . (zip <*> tail) . getRecords
 
--- | Calculates the percentage growth between Population A and B.
 growth :: (Population, Population) -> Growth
 growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
 
@@ -173,7 +147,6 @@ growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
 --                  section seven               --
 --------------------------------------------------
 
--- | Return the name (or 'no data') of the nearest city to a provided location.
 nearestCityName :: [City] -> Location -> Population -> Name
 nearestCityName cities = (maybe "no data" getName .) . nearestCity cities
 
@@ -186,7 +159,6 @@ nearestCity cities loc pop = (cities !!) <$> elemIndex (minimum dists) dists
     dists = map (distance loc . getLocation) candidates
     candidates = filter ((pop <) . head . getRecords) cities
 
--- | Returns the distance between two locations.
 distance :: Location -> Location -> Distance
 distance (x, y) (x2, y2) = sqrt . toFloat $ (x - x2) ^ 2 + (y - y2) ^ 2
 
@@ -239,8 +211,6 @@ drawCities cities = clearScreen >> mapM drawCity cities >>= adjustCursor
 adjustCursor :: [Int] -> IO ()
 adjustCursor ys = goTo (0, maximum ys + 3)
 
--- | Plot a city's name and last population to a terminal window,
--- Returning the line number the city was drawn to.
 drawCity :: City -> IO Int
 drawCity (City name loc records) = do
   writeAt (x, y) ("+ " ++ name)
@@ -248,8 +218,6 @@ drawCity (City name loc records) = do
   return (y + 1)
   where (x, y) = locationToPosition loc
 
--- | Convert a (N, E) Location to an (X, Y) ScreenPosition *that
--- can be plotted within a 80x50 terminal window*.
 locationToPosition :: Location -> ScreenPosition
 locationToPosition (n, e) = (e * 2, abs (n - 54) * 2)
 
@@ -262,9 +230,8 @@ main = do
   tmp <- fileToCities "cities.txt"
   let cities = catMaybes tmp
       (lenT, lenC) = (length tmp, length cities)
-      colour = if lenT - lenC == 0 then green else red
   -- notify the user how many have been filtered out
-  printf "\nINFO: Loaded %s cities.\n\n" (colour $ printf "%i/%i" lenC lenT)
+  printf "\nINFO: Loaded %i/%i cities.\n\n" lenC lenT
   putStrLn (getPrettyNamesString cities)
   updatedCities <- loopChoices cities
   writeFile "cities.txt" updatedCities
@@ -274,7 +241,7 @@ fileToCities :: FilePath -> IO [Maybe City]
 fileToCities fp = map readMaybe . lines <$> readFile fp
 
 showOptions :: IO ()
-showOptions = putStr $ underline "\nOptions:" ++
+showOptions = putStr $ "\nOptions:" ++
   "\n\n\
   \(1) Show names \n\
   \(2) Return population of city n years ago \n\
@@ -288,20 +255,8 @@ showOptions = putStr $ underline "\nOptions:" ++
 
 promptUser :: IO String
 promptUser = do
-  putStr "\n\n\ESC[1;2m>>>\ESC[0;2m "
-  getLine >>= (\ ln -> putStrLn endFmt >> return ln)
-
-underline :: String -> OutString
-underline = ("\ESC[1;4m" ++) . (++ endFmt)
-
-red :: String -> OutString
-red = ("\ESC[31m" ++) . (++ endFmt)
-
-green :: String -> OutString
-green = ("\ESC[32m" ++) . (++ endFmt)
-
-endFmt :: OutString
-endFmt = "\ESC[0m"
+  putStr "\n\n>>> "
+  getLine >>= (\ ln -> putStrLn "\ESC[0m" >> return ln)
 
 loopChoices :: [City] -> IO String
 loopChoices cities = do
@@ -333,10 +288,10 @@ matchChoice cities choice
   | choice == "7" = doFindCityIO cities
   | choice == "8" = drawCities cities
   | choice `elem` ["4", "5", "9"] = return ()
-  | otherwise = putStrLn (red "Invalid choice.")
+  | otherwise = putStrLn "Invalid choice."
 
 getPrettyNamesString :: [City] -> String
-getPrettyNamesString = (underline "City Names:\n" ++) . nameList
+getPrettyNamesString = ("City Names:\n" ++) . nameList
   where nameList = concatMap (printf "\n• %s" . getName)
 
 promptInput :: String -> IO String
@@ -362,13 +317,13 @@ doFindCityIO cities = do
   pop <- getIntIO "Please enter minimum population city should have:"
   putStrLn $ case (loc, pop) of
     (Just l, Just p) -> "Nearest City: " ++ nearestCityName cities l p
-    _ -> red "Invalid population figure entered."
+    _ -> "Invalid population figure entered."
 
 doPopulationIO :: [City] -> IO ()
 doPopulationIO cities = do
   name <- getCityNameIO
-  idx <- getIntIO "Please enter how many years ago to get records (0 = current):"
-  putStrLn $ maybe (red "Please enter valid integer.") (populationOf name) idx
+  idx <- getIntIO "Please enter how many years ago to get records (0 = current)"
+  putStrLn $ maybe "Please enter valid integer." (populationOf name) idx
   where populationOf name = ("Population: " ++) . getPopulation cities name
 
 doAnnualGrowthIO :: [City] -> IO ()
@@ -377,7 +332,7 @@ doAnnualGrowthIO cities = do
   let growths = concatMap (printf "\n• %.2f%%") (cityGrowth cities name)
   putStrLn $ if null growths
     then "No data available."
-    else underline "Annual Growth Figures:\n" ++ growths
+    else "Annual Growth Figures:\n" ++ growths
 
 doinsertIO :: [City] -> IO [City]
 doinsertIO cities = do
@@ -390,4 +345,4 @@ doinsertIO cities = do
         then return (cities `insert` City name loc pops)
         else err "Not enough population figures, not adding city." cities
     ) maybeLoc
-  where err str c = putStrLn (red str) >> return c
+  where err str c = putStrLn str >> return c
