@@ -50,9 +50,9 @@ type Name = String
 
 type OutString = String
 
---------------------------------------------------------
---                  helper functions                  --
---------------------------------------------------------
+------------------------------------------------
+--              helper functions              --
+------------------------------------------------
 
 toFloat :: Integral a => a -> Float
 toFloat = fromIntegral
@@ -65,14 +65,14 @@ fmtRecord :: Population -> FormattedPopulation
 fmtRecord = printf "%.3fm" . (/ 1000) . toFloat
 
 ------------------------------------------------
---                  section one               --
+--          core functionality (i)            --
 ------------------------------------------------
 
 getNames :: [City] -> [Name]
 getNames = map getName
 
 ------------------------------------------------
---                  section two               --
+--           core functionality (ii)          --
 ------------------------------------------------
 
 getPopulation :: [City] -> Name -> Index -> FormattedPopulation
@@ -87,29 +87,32 @@ maybeRecord i (City _ _ records)
 populationAt :: Maybe City -> Index -> FormattedPopulation
 populationAt city = maybe "no data" fmtRecord . (city >>=) . maybeRecord
 
---------------------------------------------------
---                  section three               --
---------------------------------------------------
+------------------------------------------------
+--         core functionality (iii)           --
+------------------------------------------------
+
+-- TODO: may need to change output if no cities
 
 citiesToString :: [City] -> OutString
 citiesToString = wrap . concatMap cityRow
 
 cityRow :: City -> OutString
 cityRow (City nm (n, e) (x:y:_)) = printf
-  "| %-10s | %10d | %10d | %10s | %10s |\n" nm n e (fmtRecord x) (fmtRecord y)
+  "| %-16s | %10d | %10d | %10s | %10s |\n" nm n e (fmtRecord x) (fmtRecord y)
 
 wrap :: String -> OutString
 wrap text = (line ++ header ++ line) ++ text ++ line
 
 header :: OutString
-header = "|    Name    | Deg. North |  Deg. East | Population |  Last Year |\n"
+header = 
+  "| Name             | Deg. North |  Deg. East | Population |  Last Year |\n"
 
 line :: OutString
-line = '+' : intercalate "+" (replicate 5 "------------") ++ "+\n"
+line = "+------" ++ intercalate "+" (replicate 5 "------------") ++ "+\n"
 
--------------------------------------------------
---                  section four               --
--------------------------------------------------
+------------------------------------------------
+--         core functionality (iv)            --
+------------------------------------------------
 
 -- | Given a list of cities and list of population records, return
 -- an updated list of cities reflecting the new data.
@@ -120,17 +123,19 @@ cities `updateRecords` pops = changed ++ drop (length changed) cities
 addYear :: City -> Population -> City
 addYear (City name loc records) pop = City name loc (pop : records)
 
--------------------------------------------------
---                  section five               --
--------------------------------------------------
+------------------------------------------------
+--           core functionality (v)           --
+------------------------------------------------
+
+-- may want to perform checks on what
+-- can be inserted (name not null, num of records)
 
 insert :: (Ord a) => [a] -> a -> [a]
 xs `insert` x = lower ++ (x : higher)
-   -- span splits [a] into ([a], [a]) based on boolean result of each a on function
   where (lower, higher) = span (< x) xs
 
 ------------------------------------------------
---                  section six               --
+--         core functionality (vi)            --
 ------------------------------------------------
 
 cityGrowth :: [City] -> Name -> [Growth]
@@ -143,9 +148,11 @@ mapGrowth = map growth . (zip <*> tail) . getRecords
 growth :: (Population, Population) -> Growth
 growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
 
---------------------------------------------------
---                  section seven               --
---------------------------------------------------
+------------------------------------------------
+--         core functionality (vii)           --
+------------------------------------------------
+
+-- this might be broken
 
 nearestCityName :: [City] -> Location -> Population -> Name
 nearestCityName cities = (maybe "no data" getName .) . nearestCity cities
@@ -162,9 +169,9 @@ nearestCity cities loc pop = (cities !!) <$> elemIndex (minimum dists) dists
 distance :: Location -> Location -> Distance
 distance (x, y) (x2, y2) = sqrt . toFloat $ (x - x2) ^ 2 + (y - y2) ^ 2
 
-------------------------------------------------------
---                  demo execution                  --
-------------------------------------------------------
+------------------------------------------------
+--               demo execution               --
+------------------------------------------------
 
 demo :: Int -> IO ()
 demo 1 = print (getNames testData)
@@ -179,9 +186,9 @@ demo 7 = putStrLn (nearestCityName testData (54, 6) 2000)
 demo 8 = drawCities testData
 demo _ = putStrLn "Please pick a number 1-8."
 
-----------------------------------------------------
---                  screen utils                  --
-----------------------------------------------------
+------------------------------------------------
+--                  screen utils              --
+------------------------------------------------
 
 type ScreenPosition = (Int, Int)
 
@@ -199,9 +206,9 @@ writeAt position text = do
   goTo position
   putStr text
 
-------------------------------------------------------
---                  population map                  --
-------------------------------------------------------
+------------------------------------------------
+--              population map                --
+------------------------------------------------
 
 -- | Clear the screen, plot a list of cities to the screen, then adjust cursor.
 drawCities :: [City] -> IO ()
@@ -221,9 +228,9 @@ drawCity (City name loc records) = do
 locationToPosition :: Location -> ScreenPosition
 locationToPosition (n, e) = (e * 2, abs (n - 54) * 2)
 
-------------------------------------------------------
---                  user interface                  --
-------------------------------------------------------
+------------------------------------------------
+--               user interface               --
+------------------------------------------------
 
 main :: IO ()
 main = do
