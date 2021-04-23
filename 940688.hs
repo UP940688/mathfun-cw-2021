@@ -1,5 +1,4 @@
--- For finding index of elements and table formatting
-import Data.List (elemIndex, intercalate)
+import Data.List (elemIndex) -- For finding index of elements
 import Data.Maybe (catMaybes) -- For filtering [Maybe a] -> [a]
 import Text.Printf (printf) -- For string formatting
 import Text.Read (readMaybe) -- For parsing IO String -> IO (Maybe a)
@@ -47,7 +46,6 @@ type OutString = String
 toFloat :: Integral a => a -> Float
 toFloat = fromIntegral
 
--- | Returns (Just City) if given valid name, Nothing otherwise.
 cityFromName :: [City] -> Name -> Maybe City
 cityFromName cities = fmap (cities !!) . (`elemIndex` getNames cities)
 
@@ -87,21 +85,18 @@ populationAt city = maybe "no data" fmtRecord . (city >>=) . maybeRecord
 ------------------------------------------------
 
 citiesToString :: [City] -> OutString
-citiesToString = wrap . concatMap cityRow
+citiesToString = tableFormat . concatMap cityRow
 
 cityRow :: City -> OutString
 cityRow (City name (n, e) (x:y:_)) = printf
-  "| %-16s | %10d | %10d | %10s | %10s |\n" name n e (fmtRecord x) (fmtRecord y)
+  "| %-13s | %10d | %10d | %10s | %10s |\n" name n e (fmtRecord x) (fmtRecord y)
 
-wrap :: String -> OutString
-wrap text = line ++ header ++ line ++ text ++ line
-
-header :: OutString
-header =
-  "| Name             | Deg. North |  Deg. East | Population |  Last Year |\n"
+tableFormat :: OutString -> OutString
+tableFormat text = printf "%s| Name          | Deg. North |  Deg. East \
+   \| Population |  Last Year |\n%s%s%s" line line text line
 
 line :: OutString
-line = "+------" ++ intercalate "+" (replicate 5 "------------") ++ "+\n"
+line = "+---------------+------------+------------+------------+------------+\n"
 
 ------------------------------------------------
 --         core functionality (iv)            --
@@ -140,17 +135,14 @@ growth (p1, p2) = toFloat (p1 - p2) / toFloat p1 * 100
 --         core functionality (vii)           --
 ------------------------------------------------
 
-nearestCityName :: [City] -> Location -> Population -> Name
-nearestCityName cities = maybe "no data" getName .: nearestCity cities
-
--- | Return (Just City) with the smallest calculated distance to provided
--- Location, with a population above the limit provided. Will return Nothing
--- if no suitable candidates can be found.
-nearestCity :: [City] -> Location -> Population -> Maybe City
-nearestCity cities loc pop = (candidates !!) <$> elemIndex (minimum dists) dists
+nearestCity :: [City] -> Location -> Population -> Name
+nearestCity cs loc pop = if null pairs then "no data" else snd (minimum pairs)
   where
-    dists = map (distance loc . getLocation) candidates
-    candidates = filter ((pop <) . head . getRecords) cities
+    pairs = map (distancePair loc) filtered
+    filtered = filter ((pop < ) . head . getRecords) cs
+
+distancePair :: Location -> City -> (Distance, Name)
+distancePair loc (City name loc2 _) = (distance loc loc2, name)
 
 distance :: Location -> Location -> Distance
 distance (x, y) (x2, y2) = sqrt . toFloat $ (x - x2) ^ 2 + (y - y2) ^ 2
@@ -168,7 +160,7 @@ demo 4 = putStr . citiesToString $ updateRecords testData
 demo 5 = putStr . citiesToString $
   testData `insert` City "Prague" (50, 14) [1312, 1306, 1299, 1292]
 demo 6 = print (cityGrowth testData "London")
-demo 7 = putStrLn (nearestCityName testData (54, 6) 2000)
+demo 7 = putStrLn (nearestCity testData (54, 6) 2000)
 demo 8 = drawCities testData
 demo _ = putStrLn "Please pick a number 1-8."
 
@@ -200,14 +192,15 @@ drawCities :: [City] -> IO ()
 drawCities cities = clearScreen >> mapM drawCity cities >>= adjustCursor
 
 adjustCursor :: [Int] -> IO ()
-adjustCursor ys = goTo (0, maximum ys + 3) -- move cursor 3 lines below lowest
+-- move cursor 3 lines below lowest plotted city population
+-- prepend 0 to the list in case drawCities is passed with no cities
+adjustCursor ys = goTo (0, maximum (0:ys) + 3)
 
 drawCity :: City -> IO Int
-drawCity (City name loc records) = do
+drawCity (City name loc records) = let (x, y) = locationToPosition loc in do
   writeAt (x, y) ("+ " ++ name)
   writeAt (x, y + 1) $ (fmtRecord . head) records
   return (y + 1)
-  where (x, y) = locationToPosition loc
 
 locationToPosition :: Location -> ScreenPosition
 locationToPosition (n, e) = (e * 2, abs (n - 54) * 2)
@@ -228,9 +221,8 @@ main = do
 fileToCities :: FilePath -> IO [Maybe City]
 fileToCities fp = map readMaybe . lines <$> readFile fp
 
-showOptions :: IO ()
-showOptions = putStr $ "\nOptions:" ++
-  "\n\n\
+options :: OutString
+options = "\nOptions:\n\n\
   \(1) Show names \n\
   \(2) Return population of city n years ago \n\
   \(3) Display cities data \n\
@@ -241,50 +233,41 @@ showOptions = putStr $ "\nOptions:" ++
   \(8) Draw city map \n\
   \(9) Exit"
 
-promptUser :: IO String
-promptUser = do
-  putStr "\n\n>>> "
+promptUser :: OutString -> IO String
+promptUser str = do
+  putStr (str ++ "\n\n>>> ")
   getLine >>= (\ln -> putStrLn "\ESC[0m" >> return ln)
 
 loopChoices :: [City] -> IO String
 loopChoices cities = do
-  choice <- showOptions >> promptUser
-  updatedCities <- case choice of
-    "4" -> do
-      new <- updateRecords cities <$> getListOfIntsIO
-      putStr (citiesToString new)
-      return new
-    "5" -> doinsertIO cities >>= \cs -> putStr (citiesToString cs) >> return cs
-    _ -> matchChoice cities choice >> return cities
+  choice <- promptUser options
   if choice == "9"
-    then return (unlines $ map show updatedCities)
-    else loopChoices updatedCities
-
-matchChoice :: [City] -> String -> IO ()
-matchChoice cities choice
-  | choice == "1" = putStrLn $ getPrettyNamesString cities
-  | choice == "2" = doPopulationIO cities
-  | choice == "3" = putStr $ citiesToString cities
-  | choice == "6" = doAnnualGrowthIO cities
-  | choice == "7" = doFindCityIO cities
-  | choice == "8" = drawCities cities
-  | choice `elem` ["4", "5", "9"] = return ()
-  | otherwise = putStrLn "Invalid choice."
+    then return (unlines $ map show cities)
+    else loopChoices =<< case choice of
+      "1" -> putStrLn (getPrettyNamesString cities) >> return cities
+      "2" -> doPopulationIO cities >> return cities
+      "3" -> putStr (citiesToString cities) >> return cities
+      "4" -> putStr . citiesToString <$> updatedRecs >> updatedRecs
+      "5" -> putStr . citiesToString <$> insertedCity >> insertedCity
+      "6" -> doAnnualGrowthIO cities >> return cities
+      "7" -> doFindCityIO cities >> return cities
+      "8" -> drawCities cities >> return cities
+      _  -> putStrLn "Invalid choice." >> return cities
+      where
+        updatedRecs = updateRecords cities <$> getListOfIntsIO
+        insertedCity = doInsertIO cities
 
 getPrettyNamesString :: [City] -> String
 getPrettyNamesString = ("City Names:\n" ++) . (printf "\n• %s" . getName =<<)
 
-promptInput :: String -> IO String
-promptInput str = putStr str >> promptUser
-
 getCityNameIO :: IO Name
-getCityNameIO = promptInput "Please enter city name:"
+getCityNameIO = promptUser "Please enter city name:"
 
 getIntIO :: String -> IO (Maybe Int)
-getIntIO = fmap readMaybe . promptInput
+getIntIO = fmap readMaybe . promptUser
 
 getLocationIO :: String -> IO (Maybe Location)
-getLocationIO = fmap readMaybe . promptInput
+getLocationIO = fmap readMaybe . promptUser
 
 getListOfIntsIO :: IO [Int]
 getListOfIntsIO = do
@@ -296,7 +279,7 @@ doFindCityIO cities = do
   loc <- getLocationIO "Please enter city's location in form (N, E):"
   pop <- getIntIO "Please enter minimum population city should have:"
   putStrLn $ case (loc, pop) of
-    (Just l, Just p) -> "Nearest City: " ++ nearestCityName cities l p
+    (Just l, Just p) -> "Nearest City: " ++ nearestCity cities l p
     _ -> "Invalid population figure entered."
 
 doPopulationIO :: [City] -> IO ()
@@ -313,8 +296,8 @@ doAnnualGrowthIO cities = do
   putStrLn $ if null growths then "No data available." else annualFigs growths
   where annualFigs growths = "Annual Growth Figures:\n" ++ growths
 
-doinsertIO :: [City] -> IO [City]
-doinsertIO cities = do
+doInsertIO :: [City] -> IO [City]
+doInsertIO cities = do
   name <- getCityNameIO
   maybeLoc <- getLocationIO "Please enter city's location in form (N, E):"
   putStrLn "Please enter population figures (from most recent, 2+ entries)"
