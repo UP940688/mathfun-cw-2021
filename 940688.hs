@@ -1,5 +1,4 @@
 import Data.List (elemIndex) -- For finding index of elements
-import Data.Maybe (catMaybes) -- For filtering [Maybe a] -> [a]
 import Text.Printf (printf) -- For string formatting
 import Text.Read (readMaybe) -- For parsing IO String -> IO (Maybe a)
 
@@ -228,9 +227,9 @@ options = "\nOptions:\n\n\
 promptUser :: OutString -> IO String
 promptUser str = do
   putStr (str ++ "\n\n>>> ")
-  line <- getLine
+  ln <- getLine
   putStr "\n"
-  return line
+  return ln
 
 loopChoices :: [City] -> IO String
 loopChoices cities = do
