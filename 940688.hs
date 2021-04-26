@@ -34,9 +34,7 @@ type Population = Int
 type Index = Int
 type Distance = Float
 type Growth = Float
-type FormattedPopulation = String
 type Name = String
-type OutString = String
 
 ------------------------------------------------
 --              helper functions              --
@@ -48,7 +46,7 @@ toFloat = fromIntegral
 cityFromName :: [City] -> Name -> Maybe City
 cityFromName cities = fmap (cities !!) . (`elemIndex` getNames cities)
 
-fmtRecord :: Population -> FormattedPopulation
+fmtRecord :: Population -> String
 fmtRecord = printf "%.3fm" . (/ 1000) . toFloat
 
 -- function composition that passes two values instead of one
@@ -67,7 +65,7 @@ getNames = map getName
 --           core functionality (ii)          --
 ------------------------------------------------
 
-getPopulation :: [City] -> Name -> Index -> FormattedPopulation
+getPopulation :: [City] -> Name -> Index -> String
 getPopulation = maybe "no data" fmtRecord .: maybeRecord .: cityFromName
 
 maybeRecord :: Maybe City -> Index -> Maybe Population
@@ -80,18 +78,18 @@ maybeRecord Nothing _ = Nothing
 --         core functionality (iii)           --
 ------------------------------------------------
 
-citiesToString :: [City] -> OutString
+citiesToString :: [City] -> String
 citiesToString = tableFormat . concatMap cityRow
 
-cityRow :: City -> OutString
+cityRow :: City -> String
 cityRow (City name (n, e) (x:y:_)) = printf
   "| %-13s | %10d | %10d | %10s | %10s |\n" name n e (fmtRecord x) (fmtRecord y)
 
-tableFormat :: OutString -> OutString
+tableFormat :: String -> String
 tableFormat text = printf "%s| Name          | Deg. North |  Deg. East \
    \| Population |  Last Year |\n%s%s%s" line line text line
 
-line :: OutString
+line :: String
 line = "+---------------+------------+------------+------------+------------+\n"
 
 ------------------------------------------------
@@ -212,7 +210,7 @@ main = do
   updatedCities <- loopChoices cities
   writeFile "cities.txt" updatedCities
 
-options :: OutString
+options :: String
 options = "\nOptions:\n\n\
   \(1) Show names \n\
   \(2) Return population of city n years ago \n\
@@ -224,7 +222,7 @@ options = "\nOptions:\n\n\
   \(8) Draw city map \n\
   \(9) Exit"
 
-promptUser :: OutString -> IO String
+promptUser :: String -> IO String
 promptUser str = do
   putStr (str ++ "\n\n>>> ")
   ln <- getLine
@@ -250,7 +248,7 @@ loopChoices cities = do
         updatedRecs = updateRecords cities <$> getListOfIntsIO
         insertedCity = doInsertIO cities
 
-getPrettyNamesString :: [City] -> OutString
+getPrettyNamesString :: [City] -> String
 getPrettyNamesString = ("City Names:\n" ++) . concatMap (("\n* "++) . getName)
 
 getCityNameIO :: IO Name
