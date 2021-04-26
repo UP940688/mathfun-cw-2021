@@ -53,7 +53,7 @@ fmtRecord :: Population -> FormattedPopulation
 fmtRecord = printf "%.3fm" . (/ 1000) . toFloat
 
 -- function composition that passes two values instead of one
--- i.e. a = f .: g is equivalent to a x y = f (g x y)
+-- i.e. a = f .: g is equivalent to a = (f .) . g
 (.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 (.:) = (.) . (.)
 
@@ -69,16 +69,13 @@ getNames = map getName
 ------------------------------------------------
 
 getPopulation :: [City] -> Name -> Index -> FormattedPopulation
-getPopulation = populationAt .: cityFromName
+getPopulation = maybe "no data" fmtRecord .: maybeRecord .: cityFromName
 
-maybeRecord :: Index -> City -> Maybe Population
-maybeRecord i (City _ _ records)
+maybeRecord :: Maybe City -> Index -> Maybe Population
+maybeRecord (Just (City _ _ records)) i
   | i >= 0 && i < length records = Just (records !! i)
   | otherwise = Nothing
-
--- | Returns FormattedPopulation of (Maybe City) from Index years ago.
-populationAt :: Maybe City -> Index -> FormattedPopulation
-populationAt city = maybe "no data" fmtRecord . (city >>=) . maybeRecord
+maybeRecord Nothing _ = Nothing
 
 ------------------------------------------------
 --         core functionality (iii)           --
@@ -189,15 +186,14 @@ writeAt position text = do
 ------------------------------------------------
 
 drawCities :: [City] -> IO ()
-drawCities cities = clearScreen >> mapM drawCity cities >>= adjustCursor
-
-adjustCursor :: [Int] -> IO ()
--- move cursor 3 lines below lowest plotted city population
--- prepend 0 to the list in case drawCities is passed with no cities
-adjustCursor ys = goTo (0, maximum (0:ys) + 3)
+drawCities cities = do
+  clearScreen
+  plots <- mapM drawCity cities
+  goTo (0, maximum (0:plots) + 3) -- go to three lines below lowest drawn city
 
 drawCity :: City -> IO Int
-drawCity (City name loc records) = let (x, y) = locationToPosition loc in do
+drawCity (City name loc records) = do
+  let (x, y) = locationToPosition loc 
   writeAt (x, y) ("+ " ++ name)
   writeAt (x, y + 1) $ (fmtRecord . head) records
   return (y + 1)
@@ -211,15 +207,11 @@ locationToPosition (n, e) = (e * 2, abs (n - 54) * 2)
 
 main :: IO ()
 main = do
-  tmp <- fileToCities "cities.txt"
-  let cities = catMaybes tmp
-  printf "\nINFO: Loaded %i/%i cities.\n\n" (length cities) (length tmp)
+  file <- readFile "cities.txt"
+  let cities = read file :: [City]
   putStrLn (getPrettyNamesString cities)
   updatedCities <- loopChoices cities
   writeFile "cities.txt" updatedCities
-
-fileToCities :: FilePath -> IO [Maybe City]
-fileToCities fp = map readMaybe . lines <$> readFile fp
 
 options :: OutString
 options = "\nOptions:\n\n\
@@ -236,13 +228,15 @@ options = "\nOptions:\n\n\
 promptUser :: OutString -> IO String
 promptUser str = do
   putStr (str ++ "\n\n>>> ")
-  getLine >>= (\ln -> putStrLn "\ESC[0m" >> return ln)
+  line <- getLine
+  putStr "\n"
+  return line
 
 loopChoices :: [City] -> IO String
 loopChoices cities = do
   choice <- promptUser options
   if choice == "9"
-    then return (unlines $ map show cities)
+    then return (show cities)
     else loopChoices =<< case choice of
       "1" -> putStrLn (getPrettyNamesString cities) >> return cities
       "2" -> doPopulationIO cities >> return cities
@@ -257,8 +251,8 @@ loopChoices cities = do
         updatedRecs = updateRecords cities <$> getListOfIntsIO
         insertedCity = doInsertIO cities
 
-getPrettyNamesString :: [City] -> String
-getPrettyNamesString = ("City Names:\n" ++) . (printf "\n• %s" . getName =<<)
+getPrettyNamesString :: [City] -> OutString
+getPrettyNamesString = ("City Names:\n" ++) . concatMap (("\n* "++) . getName)
 
 getCityNameIO :: IO Name
 getCityNameIO = promptUser "Please enter city name:"
@@ -292,7 +286,7 @@ doPopulationIO cities = do
 doAnnualGrowthIO :: [City] -> IO ()
 doAnnualGrowthIO cities = do
   name <- getCityNameIO
-  let growths = printf "\n• %.2f%%" =<< cityGrowth cities name
+  let growths = printf "\n* %.2f%%" =<< cityGrowth cities name
   putStrLn $ if null growths then "No data available." else annualFigs growths
   where annualFigs growths = "Annual Growth Figures:\n" ++ growths
 
