@@ -82,15 +82,12 @@ citiesToString :: [City] -> String
 citiesToString = tableFormat . concatMap cityRow
 
 cityRow :: City -> String
-cityRow (City name (n, e) (x:y:_)) = printf
-  "| %-13s | %10d | %10d | %10s | %10s |\n" name n e (fmtRecord x) (fmtRecord y)
+cityRow (City name (n, e) (cur:prev:_)) = printf "%-15s %6d %6d %12s %12s\n"
+  name n e (fmtRecord cur) (fmtRecord prev)
 
 tableFormat :: String -> String
-tableFormat text = printf "%s| Name          | Deg. North |  Deg. East \
-   \| Population |  Last Year |\n%s%s%s" line line text line
-
-line :: String
-line = "+---------------+------------+------------+------------+------------+\n"
+tableFormat = printf "%-15s %6s %6s %12s %12s\n%s\n%s" "Name" "North" "East"
+  "Population" "Last Year" (replicate 55 '-')
 
 ------------------------------------------------
 --         core functionality (iv)            --
@@ -101,7 +98,7 @@ cities `updateRecords` pops = changed ++ drop (length changed) cities
   where changed = zipWith addYear cities pops
 
 addYear :: City -> Population -> City
-addYear (City name loc records) pop = City name loc (pop : records)
+addYear (City name loc records) = City name loc . (:records)
 
 ------------------------------------------------
 --           core functionality (v)           --
@@ -222,12 +219,8 @@ options = "\nOptions:\n\n\
   \(8) Draw city map \n\
   \(9) Exit"
 
-promptUser :: String -> IO String
-promptUser str = do
-  putStr (str ++ "\n\n>>> ")
-  ln <- getLine
-  putStr "\n"
-  return ln
+getPrettyNamesString :: [City] -> String
+getPrettyNamesString = ("City Names:\n" ++) . concatMap (("\n* "++) . getName)
 
 loopChoices :: [City] -> IO String
 loopChoices cities = do
@@ -238,18 +231,25 @@ loopChoices cities = do
       "1" -> putStrLn (getPrettyNamesString cities) >> return cities
       "2" -> doPopulationIO cities >> return cities
       "3" -> putStr (citiesToString cities) >> return cities
-      "4" -> putStr . citiesToString <$> updatedRecs >> updatedRecs
-      "5" -> putStr . citiesToString <$> insertedCity >> insertedCity
+      "4" -> do
+        new <- updateRecords cities <$> getListOfIntsIO
+        putStr (citiesToString new)
+        return new
+      "5" -> do
+        new <- doInsertIO cities
+        putStr (citiesToString new)
+        return new
       "6" -> doAnnualGrowthIO cities >> return cities
       "7" -> doFindCityIO cities >> return cities
       "8" -> drawCities cities >> return cities
       _  -> putStrLn "Invalid choice." >> return cities
-      where
-        updatedRecs = updateRecords cities <$> getListOfIntsIO
-        insertedCity = doInsertIO cities
 
-getPrettyNamesString :: [City] -> String
-getPrettyNamesString = ("City Names:\n" ++) . concatMap (("\n* "++) . getName)
+promptUser :: String -> IO String
+promptUser str = do
+  putStr (str ++ "\n\n>>> ")
+  ln <- getLine
+  putStr "\n"
+  return ln
 
 getCityNameIO :: IO Name
 getCityNameIO = promptUser "Please enter city name:"
